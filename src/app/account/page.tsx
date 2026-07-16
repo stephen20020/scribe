@@ -28,11 +28,6 @@ export default function AccountPage() {
         setBusy(false);
         return;
       }
-      if (password.length < 8) {
-        setMessage("Password must be at least 8 characters.");
-        setBusy(false);
-        return;
-      }
       const result = await signUp(email.trim(), password, name.trim());
       setBusy(false);
       if (result.error) {
@@ -174,14 +169,8 @@ export default function AccountPage() {
                   autoComplete={
                     mode === "signup" ? "new-password" : "current-password"
                   }
-                  minLength={mode === "signup" ? 8 : 6}
                   required
                 />
-                {mode === "signup" && (
-                  <span className="mt-1.5 block text-xs text-ink-faint">
-                    At least 8 characters.
-                  </span>
-                )}
               </label>
               <button
                 type="submit"
