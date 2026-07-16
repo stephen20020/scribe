@@ -588,7 +588,8 @@ export function TypingLesson({
     if (planId) params.set("planId", planId);
     if (planDay != null) params.set("planDay", String(planDay));
     if (isRandom) params.set("random", "1");
-    router.push(`/type?${params.toString()}`);
+    // Hard navigate: soft router.push on /type often leaves search params stuck.
+    window.location.assign(`/type?${params.toString()}`);
   }
 
   function switchLanguage(next: BibleLanguageId) {
