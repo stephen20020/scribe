@@ -10,6 +10,7 @@ import {
   type BibleVersionId,
   type LessonScope,
 } from "@/lib/bible/types";
+import { RandomVerseButton } from "@/components/random-verse-button";
 import { useScribeStore } from "@/lib/store/use-scribe-store";
 import { cn } from "@/lib/utils";
 
@@ -323,13 +324,19 @@ export function ScripturePicker({
               )}
             </fieldset>
 
-            <button
-              type="button"
-              onClick={startTyping}
-              className="mt-2 w-full rounded-full bg-ink px-6 py-4 font-display text-lg text-bg transition hover:opacity-90 sm:w-auto sm:px-10"
-            >
-              Begin typing
-            </button>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={startTyping}
+                className="w-full rounded-full bg-ink px-6 py-4 font-display text-lg text-bg transition hover:opacity-90 sm:w-auto sm:px-10"
+              >
+                Begin typing
+              </button>
+              <RandomVerseButton
+                version={version}
+                className="w-full rounded-full border border-line px-6 py-3.5 text-sm text-ink-muted transition hover:text-ink sm:w-auto"
+              />
+            </div>
           </>
         )}
       </div>

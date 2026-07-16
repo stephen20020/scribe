@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { SiteHeader } from "@/components/site-header";
 import { PageEnter } from "@/components/page-enter";
+import { RandomVerseButton } from "@/components/random-verse-button";
 
 export default function HomePage() {
   return (
@@ -37,6 +38,7 @@ export default function HomePage() {
             >
               Start typing
             </Link>
+            <RandomVerseButton className="rounded-full border border-line px-6 py-3.5 text-sm text-ink-muted transition hover:text-ink" />
             <Link
               href="/plans"
               className="rounded-full border border-line px-6 py-3.5 text-sm text-ink-muted transition hover:text-ink"
