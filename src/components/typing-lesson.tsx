@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { loadBible } from "@/lib/bible/load";
 import { buildLessonTarget } from "@/lib/bible/references";
-import type {
-  BibleVersionId,
-  LessonScope,
-  LessonTarget,
+import {
+  BIBLE_VERSIONS,
+  type BibleVersionId,
+  type LessonScope,
+  type LessonTarget,
 } from "@/lib/bible/types";
+import { useScribeStore } from "@/lib/store/use-scribe-store";
 import {
   createTypingState,
   getLiveStats,
@@ -46,6 +48,7 @@ export function TypingLesson({
   planDay?: number;
 }) {
   const router = useRouter();
+  const setPreferredVersion = useScribeStore((s) => s.setVersion);
 
   const [target, setTarget] = useState<LessonTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -386,16 +389,54 @@ export function TypingLesson({
     );
   }
 
+  function switchVersion(next: BibleVersionId) {
+    if (next === version) return;
+    setPreferredVersion(next);
+    const params = new URLSearchParams({
+      version: next,
+      book,
+      chapter: String(chapter),
+      verse: String(verse),
+      scope,
+      passage: String(passageLength),
+      go: "1",
+    });
+    if (planId) params.set("planId", planId);
+    if (planDay != null) params.set("planDay", String(planDay));
+    router.replace(`/type?${params.toString()}`);
+  }
+
   return (
     <div className="mx-auto w-full max-w-3xl">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="font-mono text-[11px] tracking-[0.22em] text-ink-faint uppercase">
-            {target.version.toUpperCase()} · {target.scope}
+            {target.scope}
           </p>
           <h1 className="mt-1 font-display text-3xl tracking-tight sm:text-4xl">
             {target.referenceLabel}
           </h1>
+          <div
+            className="mt-3 flex flex-wrap gap-2"
+            role="group"
+            aria-label="Translation"
+          >
+            {BIBLE_VERSIONS.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => switchVersion(v.id)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 font-mono text-[11px] tracking-wider uppercase transition",
+                  version === v.id
+                    ? "border-accent bg-accent-soft text-ink"
+                    : "border-line text-ink-muted hover:text-ink",
+                )}
+              >
+                {v.short}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex flex-wrap gap-4 font-mono text-xs tracking-wide text-ink-muted uppercase">
           <Stat label="WPM" value={String(live.wpm)} />
