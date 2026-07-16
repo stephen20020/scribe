@@ -70,7 +70,7 @@ export function CoachCard() {
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h2 className="font-display text-2xl">Typing coach</h2>
         <span className="font-mono text-[11px] tracking-[0.14em] text-ink-faint uppercase">
-          {source === "ai" ? "AI + patterns" : "Pattern tips"}
+          {source === "ai" ? "Claude + patterns" : "Pattern tips"}
           {busy ? " · updating" : ""}
         </span>
       </div>

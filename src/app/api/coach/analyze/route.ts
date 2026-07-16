@@ -60,40 +60,45 @@ function sanitizeProfile(body: unknown): ProfilePayload | null {
   };
 }
 
-async function askOpenAi(profile: ProfilePayload): Promise<string | null> {
-  const key = process.env.OPENAI_API_KEY;
+const SYSTEM =
+  "You are a calm typing coach for a Bible typing app called Scribe. You receive ONLY aggregate mistake statistics — never Scripture text. Reply with 2-4 short sentences of practical advice. No markdown, no lists, no scripture quotes. Warm, specific, encouraging.";
+
+async function askClaude(profile: ProfilePayload): Promise<string | null> {
+  const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return null;
 
-  const model = process.env.COACH_MODEL ?? "gpt-4o-mini";
-  const prompt = {
-    role: "system" as const,
-    content:
-      "You are a calm typing coach for a Bible typing app called Scribe. You receive ONLY aggregate mistake statistics — never Scripture text. Reply with 2-4 short sentences of practical advice. No markdown, no lists, no scripture quotes. Warm, specific, encouraging.",
-  };
-  const user = {
-    role: "user" as const,
-    content: JSON.stringify(profile),
-  };
+  const model = process.env.COACH_MODEL ?? "claude-haiku-4-5-20251001";
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${key}`,
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       model,
-      temperature: 0.4,
       max_tokens: 220,
-      messages: [prompt, user],
+      temperature: 0.4,
+      system: SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: `Here are this typist's aggregate mistake stats (JSON). Write the coaching note:\n${JSON.stringify(profile)}`,
+        },
+      ],
     }),
   });
 
   if (!res.ok) return null;
   const data = (await res.json()) as {
-    choices?: { message?: { content?: string } }[];
+    content?: { type?: string; text?: string }[];
   };
-  const text = data.choices?.[0]?.message?.content?.trim();
+  const text = data.content
+    ?.filter((b) => b.type === "text" && b.text)
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
   return text && text.length > 20 ? text.slice(0, 800) : null;
 }
 
@@ -127,7 +132,7 @@ export async function POST(req: Request) {
     : rules.suggestedDrill;
 
   try {
-    const aiNarrative = await askOpenAi(payload);
+    const aiNarrative = await askClaude(payload);
     if (aiNarrative) {
       return NextResponse.json({
         narrative: aiNarrative,
