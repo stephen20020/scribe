@@ -63,9 +63,13 @@ function sanitizeProfile(body: unknown): ProfilePayload | null {
 const SYSTEM =
   "You are a calm typing coach for a Bible typing app called Scribe. You receive ONLY aggregate mistake statistics — never Scripture text. Reply with 2-4 short sentences of practical advice. No markdown, no lists, no scripture quotes. Warm, specific, encouraging.";
 
-async function askClaude(profile: ProfilePayload): Promise<string | null> {
+type ClaudeResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: string | null };
+
+async function askClaude(profile: ProfilePayload): Promise<ClaudeResult> {
   const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return null;
+  if (!key) return { ok: false, reason: "ANTHROPIC_API_KEY is not set" };
 
   const model = process.env.COACH_MODEL ?? "claude-haiku-4-5-20251001";
 
@@ -90,16 +94,32 @@ async function askClaude(profile: ProfilePayload): Promise<string | null> {
     }),
   });
 
-  if (!res.ok) return null;
   const data = (await res.json()) as {
     content?: { type?: string; text?: string }[];
+    error?: { message?: string; type?: string };
   };
+
+  if (!res.ok) {
+    const msg = data.error?.message ?? `Claude request failed (${res.status})`;
+    if (/credit balance|billing|purchase credits/i.test(msg)) {
+      return {
+        ok: false,
+        reason:
+          "Claude API has no credits — add billing at platform.claude.com/settings/billing",
+      };
+    }
+    return { ok: false, reason: msg };
+  }
+
   const text = data.content
     ?.filter((b) => b.type === "text" && b.text)
     .map((b) => b.text)
     .join("\n")
     .trim();
-  return text && text.length > 20 ? text.slice(0, 800) : null;
+  if (!text || text.length <= 20) {
+    return { ok: false, reason: "Claude returned an empty coach note" };
+  }
+  return { ok: true, text: text.slice(0, 800) };
 }
 
 export async function POST(req: Request) {
@@ -132,15 +152,22 @@ export async function POST(req: Request) {
     : rules.suggestedDrill;
 
   try {
-    const aiNarrative = await askClaude(payload);
-    if (aiNarrative) {
+    const ai = await askClaude(payload);
+    if (ai.ok) {
       return NextResponse.json({
-        narrative: aiNarrative,
+        narrative: ai.text,
         insights: rules.insights,
         suggestedDrill,
         source: "ai" as const,
       });
     }
+    return NextResponse.json({
+      narrative: rules.narrative,
+      insights: rules.insights,
+      suggestedDrill,
+      source: "rules" as const,
+      aiError: ai.reason,
+    });
   } catch {
     // fall through to rules
   }

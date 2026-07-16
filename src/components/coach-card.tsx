@@ -45,6 +45,7 @@ export function CoachCard() {
         suggestedDrill?: typeof drill;
         source?: "rules" | "ai";
         error?: string;
+        aiError?: string;
       };
       if (!res.ok) {
         setError(data.error ?? "Coach unavailable");
@@ -57,6 +58,9 @@ export function CoachCard() {
           suggestedDrill: data.suggestedDrill ?? rules.suggestedDrill,
         });
         void syncTypingProfile();
+      }
+      if (data.source !== "ai" && data.aiError) {
+        setError(data.aiError);
       }
     } catch {
       setError("Could not reach coach");
