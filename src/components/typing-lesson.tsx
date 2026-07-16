@@ -64,11 +64,12 @@ export function TypingLesson({
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [live, setLive] = useState<LiveStats | null>(null);
   const [ready, setReady] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
 
   const stateRef = useRef<TypingSnapshot | null>(null);
   const targetRef = useRef<LessonTarget | null>(null);
   const charElsRef = useRef<(HTMLSpanElement | null)[]>([]);
-  const focusRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
@@ -79,7 +80,13 @@ export function TypingLesson({
   const flashTimerRef = useRef<number | null>(null);
 
   const focusLesson = useCallback(() => {
-    focusRef.current?.focus({ preventScroll: true });
+    const input = inputRef.current;
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    // iOS sometimes needs a second focus after a tap gesture
+    requestAnimationFrame(() => {
+      input.focus({ preventScroll: true });
+    });
   }, []);
 
   const syncStats = useCallback((snapshot: TypingSnapshot) => {
@@ -324,6 +331,7 @@ export function TypingLesson({
     setIsPaused(true);
     setConfirmEnd(false);
     syncStats(next);
+    inputRef.current?.blur();
   };
 
   const onResume = () => {
@@ -360,7 +368,7 @@ export function TypingLesson({
     saveAndLeave(snap, lesson, { completed: snap.isComplete });
   };
 
-  const onKeyDown = (e: React.KeyboardEvent) => {
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!stateRef.current) return;
 
     if (e.key === "Escape") {
@@ -377,12 +385,23 @@ export function TypingLesson({
 
     if (stateRef.current.isPaused) return;
 
-    if (e.key === "Backspace" || e.key.length === 1) {
-      // Stop browser shortcuts / scroll / find-as-you-type jank
+    if (e.key === "Backspace") {
       e.preventDefault();
       e.stopPropagation();
       if (confirmEnd) setConfirmEnd(false);
-      applyKey(e.key);
+      applyKey("Backspace");
+    }
+  };
+
+  const onCaptureInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
+    const el = e.currentTarget;
+    const value = el.value;
+    el.value = "";
+    if (!value || !stateRef.current || stateRef.current.isPaused) return;
+    if (confirmEnd) setConfirmEnd(false);
+    for (const ch of value) {
+      if (ch === "\n" || ch === "\r") continue;
+      applyKey(ch);
     }
   };
 
@@ -542,18 +561,42 @@ export function TypingLesson({
             className="rounded-full border border-line px-5 py-2 text-sm text-ink-muted transition hover:text-ink"
           />
         )}
+
+        <button
+          type="button"
+          onClick={focusLesson}
+          className={cn(
+            "rounded-full border px-5 py-2 text-sm transition sm:hidden",
+            inputFocused
+              ? "border-accent bg-accent-soft text-ink"
+              : "border-line text-ink-muted hover:text-ink",
+          )}
+        >
+          {inputFocused ? "Keyboard ready" : "Open keyboard"}
+        </button>
       </div>
 
       <div
-        ref={(node) => {
-          focusRef.current = node;
-          stageRef.current = node;
-        }}
-        tabIndex={0}
-        onKeyDown={onKeyDown}
+        ref={stageRef}
         onClick={focusLesson}
         className="typing-stage relative outline-none"
       >
+        <textarea
+          ref={inputRef}
+          className="typing-capture"
+          aria-label="Type the passage"
+          autoCapitalize="off"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          inputMode="text"
+          enterKeyHint="next"
+          rows={1}
+          onKeyDown={onKeyDown}
+          onInput={onCaptureInput}
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => setInputFocused(false)}
+        />
         <div
           ref={scrollerRef}
           className="typing-scroller"
@@ -618,8 +661,13 @@ export function TypingLesson({
           />
         </div>
         <p className="mt-4 text-sm text-ink-faint">
-          The line stays in the focus band as you type. Esc pauses · Backspace
-          corrects.
+          <span className="sm:hidden">
+            Tap Open keyboard (or the verse) to type. Backspace corrects.
+          </span>
+          <span className="hidden sm:inline">
+            The line stays in the focus band as you type. Esc pauses ·
+            Backspace corrects.
+          </span>
         </p>
       </div>
     </div>
