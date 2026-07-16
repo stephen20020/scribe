@@ -88,7 +88,6 @@ export function TypingLesson({
   const [live, setLive] = useState<LiveStats | null>(null);
   const [ready, setReady] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
-  const [typingStarted, setTypingStarted] = useState(false);
 
   const stateRef = useRef<TypingSnapshot | null>(null);
   const targetRef = useRef<LessonTarget | null>(null);
@@ -225,7 +224,6 @@ export function TypingLesson({
       setTarget(lesson);
       setIsPaused(false);
       setConfirmEnd(false);
-      setTypingStarted(false);
       setError(null);
       setLive(getLiveStats(snapshot));
       setReady(true);
@@ -311,7 +309,6 @@ export function TypingLesson({
       const next = handleKey(prev, key);
       if (next === prev) return;
 
-      if (!prev.startedAt && next.startedAt) setTypingStarted(true);
       lastKeyAtRef.current = Date.now();
 
       const oldCaret = prev.caret;
@@ -595,7 +592,7 @@ export function TypingLesson({
   }
 
   function switchLanguage(next: BibleLanguageId) {
-    if (next === language || typingStarted) return;
+    if (next === language) return;
     const nextVersion = DEFAULT_VERSION[next];
     setPreferredLanguage(next);
     setPreferredVersion(nextVersion);
@@ -603,7 +600,7 @@ export function TypingLesson({
   }
 
   function switchVersion(next: BibleVersionId) {
-    if (next === version || typingStarted) return;
+    if (next === version) return;
     setPreferredVersion(next);
     goToLesson(next, book);
   }
@@ -627,25 +624,18 @@ export function TypingLesson({
               >
                 {BIBLE_LANGUAGES.map((lang) => {
                   const selected = language === lang.id;
-                  const locked = typingStarted && !selected;
                   return (
                     <button
                       key={lang.id}
                       type="button"
                       aria-pressed={selected}
-                      disabled={locked}
-                      title={
-                        locked
-                          ? "Language is locked after you start typing"
-                          : lang.label
-                      }
+                      title={lang.label}
                       onClick={() => switchLanguage(lang.id)}
                       className={cn(
                         "rounded-full px-3 py-1 font-mono text-[11px] tracking-wider uppercase transition",
                         selected
                           ? "bg-ink text-bg"
                           : "text-ink-muted hover:text-ink",
-                        locked && "cursor-not-allowed opacity-40",
                       )}
                     >
                       {lang.short}
@@ -660,26 +650,18 @@ export function TypingLesson({
               >
                 {versions.map((v) => {
                   const selected = version === v.id;
-                  const locked = typingStarted && !selected;
                   return (
                     <button
                       key={v.id}
                       type="button"
                       aria-pressed={selected}
-                      disabled={locked}
-                      title={
-                        locked
-                          ? "Translation is locked after you start typing"
-                          : v.name
-                      }
+                      title={`${v.name} — switches version and restarts the lesson`}
                       onClick={() => switchVersion(v.id)}
                       className={cn(
                         "rounded-full border px-3 py-1.5 font-mono text-[11px] tracking-wider uppercase transition",
                         selected
                           ? "border-accent bg-accent-soft text-ink"
                           : "border-line text-ink-muted hover:text-ink",
-                        locked &&
-                          "cursor-not-allowed opacity-40 hover:text-ink-muted",
                       )}
                     >
                       {v.short}
