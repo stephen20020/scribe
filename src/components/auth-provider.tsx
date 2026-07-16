@@ -100,7 +100,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (nextSession?.user) {
         void mergeAndLoad(nextSession.user);
       } else {
-        useScribeStore.getState().setAccountName(null);
+        // Signed out — never leave account progress in memory/storage.
+        useScribeStore.getState().resetAccountData();
       }
     });
 
@@ -152,8 +153,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     const supabase = createClient();
+    // Clear local account data first so UI empties even if signOut is slow.
+    useScribeStore.getState().resetAccountData();
     await supabase.auth.signOut();
-    useScribeStore.getState().setAccountName(null);
+    useScribeStore.getState().resetAccountData();
   }, []);
 
   const value = useMemo(

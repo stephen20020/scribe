@@ -60,7 +60,7 @@ export default function AccountPage() {
     setBusy(true);
     await signOut();
     setBusy(false);
-    setMessage("Signed out. Guest progress stays on this device.");
+    setMessage("Signed out. Local progress cleared — sign in again to load your account.");
   }
 
   return (

@@ -43,7 +43,7 @@ export default function DashboardPage() {
         <p className="mt-3 text-ink-muted">
           {accountName
             ? "Your stats sync with your account across devices."
-            : "Progress is saved on this device. Create an account to sync."}
+            : "Sign in to keep stats and coach progress. Nothing is saved in this browser when you’re signed out."}
         </p>
 
         {!accountName && (

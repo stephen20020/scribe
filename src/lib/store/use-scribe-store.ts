@@ -110,6 +110,8 @@ interface ScribeState {
   removeCustomPlan: (id: string) => void;
   setAccountName: (name: string | null) => void;
   clearHistory: () => void;
+  /** Wipe sessions / plans / coach / account — used on sign-out. Prefs kept. */
+  resetAccountData: () => void;
   getLocalSnapshot: () => {
     sessions: TypingSession[];
     planProgress: Record<string, PlanProgress>;
@@ -123,6 +125,24 @@ interface ScribeState {
     customPlans: CustomPlan[];
     typingProfile?: TypingProfile | null;
   }) => void;
+}
+
+const defaultPreferences: Preferences = {
+  language: "en",
+  version: "web",
+  defaultScope: "passage",
+  passageLength: 5,
+};
+
+function emptyAccountSlice() {
+  return {
+    sessions: [] as TypingSession[],
+    planProgress: {} as Record<string, PlanProgress>,
+    customPlans: [] as CustomPlan[],
+    typingProfile: emptyTypingProfile(),
+    lastSessionId: null as string | null,
+    accountName: null as string | null,
+  };
 }
 
 function dayKey(iso: string): string {
@@ -177,18 +197,8 @@ export function computeAggregates(sessions: TypingSession[]) {
 export const useScribeStore = create<ScribeState>()(
   persist(
     (set, get) => ({
-      preferences: {
-        language: "en",
-        version: "web",
-        defaultScope: "passage",
-        passageLength: 5,
-      },
-      sessions: [],
-      planProgress: {},
-      customPlans: [],
-      typingProfile: emptyTypingProfile(),
-      lastSessionId: null,
-      accountName: null,
+      preferences: { ...defaultPreferences },
+      ...emptyAccountSlice(),
       _hasHydrated: false,
 
       setHasHydrated: (value) => set({ _hasHydrated: value }),
@@ -316,6 +326,8 @@ export const useScribeStore = create<ScribeState>()(
           typingProfile: emptyTypingProfile(),
         }),
 
+      resetAccountData: () => set(emptyAccountSlice()),
+
       getLocalSnapshot: () => {
         const s = get();
         return {
@@ -363,8 +375,16 @@ export const useScribeStore = create<ScribeState>()(
         }),
     }),
     {
-      name: "scribe-storage-v1",
+      // Preferences only — never persist sessions, plans, or coach to the browser.
+      name: "scribe-prefs-v1",
+      partialize: (state) => ({ preferences: state.preferences }),
       onRehydrateStorage: () => (state) => {
+        // Drop legacy full-state cache from earlier builds.
+        try {
+          localStorage.removeItem("scribe-storage-v1");
+        } catch {
+          // ignore
+        }
         if (state?.preferences) {
           if (!state.preferences.language) {
             state.preferences.language = languageForVersion(
@@ -374,19 +394,15 @@ export const useScribeStore = create<ScribeState>()(
             languageForVersion(state.preferences.version) !==
             state.preferences.language
           ) {
-            // Keep language + version in sync after the bilingual rollout.
             state.preferences.version =
               DEFAULT_VERSION[state.preferences.language];
           }
         }
-        if (state && !state.typingProfile) {
-          state.typingProfile = emptyTypingProfile();
+        // Account data must never come from disk.
+        if (state) {
+          Object.assign(state, emptyAccountSlice());
         }
         state?.setHasHydrated(true);
-        // Rebuild coach from sessions after hydrate (older localStorage may lack profile)
-        queueMicrotask(() => {
-          useScribeStore.getState().refreshTypingProfile();
-        });
       },
     },
   ),
