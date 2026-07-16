@@ -20,7 +20,7 @@ import {
   type TypingSnapshot,
 } from "@/lib/typing/engine";
 import { charClassName, paintChar, scrollCaretIntoBand } from "@/lib/typing/dom";
-import { useScribeStore } from "@/lib/store/use-scribe-store";
+import { savePlanDayComplete, saveSession } from "@/lib/supabase/persist";
 import { formatDuration, uid, cn } from "@/lib/utils";
 
 const STATS_MS = 100;
@@ -46,8 +46,6 @@ export function TypingLesson({
   planDay?: number;
 }) {
   const router = useRouter();
-  const addSession = useScribeStore((s) => s.addSession);
-  const markPlanDayComplete = useScribeStore((s) => s.markPlanDayComplete);
 
   const [target, setTarget] = useState<LessonTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +132,7 @@ export function TypingLesson({
         ? lesson.verses.length
         : Math.max(0, Math.floor(stats.progress * lesson.verses.length));
 
-      addSession({
+      const session = {
         id: sessionId,
         version: lesson.version,
         referenceLabel: lesson.referenceLabel,
@@ -152,15 +150,18 @@ export function TypingLesson({
         completedAt: new Date().toISOString(),
         planId,
         planDay,
-      });
+      };
 
-      if (opts.completed && planId && planDay) {
-        markPlanDayComplete(planId, planDay);
-      }
+      void (async () => {
+        if (opts.completed && planId && planDay) {
+          await savePlanDayComplete(planId, planDay);
+        }
+        await saveSession(session);
+      })();
 
       router.push(`/stats?session=${sessionId}`);
     },
-    [addSession, markPlanDayComplete, planDay, planId, router],
+    [planDay, planId, router],
   );
 
   useEffect(() => {

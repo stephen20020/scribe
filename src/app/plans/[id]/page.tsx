@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/site-header";
 import { PageEnter } from "@/components/page-enter";
 import { getStockPlan } from "@/lib/plans/stock";
 import { useScribeStore } from "@/lib/store/use-scribe-store";
+import { removeCustomPlan } from "@/lib/supabase/persist";
 import { cn } from "@/lib/utils";
 import type { AnyPlan } from "@/lib/plans/types";
 
@@ -16,7 +17,6 @@ export default function PlanDetailPage() {
   const customPlans = useScribeStore((s) => s.customPlans);
   const planProgress = useScribeStore((s) => s.planProgress);
   const preferences = useScribeStore((s) => s.preferences);
-  const removeCustomPlan = useScribeStore((s) => s.removeCustomPlan);
 
   const stock = getStockPlan(id);
   const custom = customPlans.find((p) => p.id === id);
@@ -94,7 +94,7 @@ export default function PlanDetailPage() {
             <button
               type="button"
               onClick={() => {
-                removeCustomPlan(plan.id);
+                void removeCustomPlan(plan.id);
                 router.push("/plans");
               }}
               className="text-sm text-incorrect"

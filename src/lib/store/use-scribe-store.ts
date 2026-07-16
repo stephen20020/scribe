@@ -50,6 +50,17 @@ interface ScribeState {
   removeCustomPlan: (id: string) => void;
   setAccountName: (name: string | null) => void;
   clearHistory: () => void;
+  getLocalSnapshot: () => {
+    sessions: TypingSession[];
+    planProgress: Record<string, PlanProgress>;
+    customPlans: CustomPlan[];
+  };
+  hydrateFromCloud: (payload: {
+    accountName: string | null;
+    sessions: TypingSession[];
+    planProgress: Record<string, PlanProgress>;
+    customPlans: CustomPlan[];
+  }) => void;
 }
 
 function dayKey(iso: string): string {
@@ -103,7 +114,7 @@ export function computeAggregates(sessions: TypingSession[]) {
 
 export const useScribeStore = create<ScribeState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       preferences: {
         version: "web",
         defaultScope: "passage",
@@ -138,7 +149,10 @@ export const useScribeStore = create<ScribeState>()(
 
       addSession: (session) =>
         set((s) => ({
-          sessions: [session, ...s.sessions].slice(0, 500),
+          sessions: [session, ...s.sessions.filter((x) => x.id !== session.id)].slice(
+            0,
+            500,
+          ),
           lastSessionId: session.id,
         })),
 
@@ -166,7 +180,7 @@ export const useScribeStore = create<ScribeState>()(
 
       addCustomPlan: (plan) =>
         set((s) => ({
-          customPlans: [plan, ...s.customPlans],
+          customPlans: [plan, ...s.customPlans.filter((p) => p.id !== plan.id)],
         })),
 
       removeCustomPlan: (id) =>
@@ -183,6 +197,29 @@ export const useScribeStore = create<ScribeState>()(
         set({
           sessions: [],
           lastSessionId: null,
+        }),
+
+      getLocalSnapshot: () => {
+        const s = get();
+        return {
+          sessions: s.sessions,
+          planProgress: s.planProgress,
+          customPlans: s.customPlans,
+        };
+      },
+
+      hydrateFromCloud: ({
+        accountName,
+        sessions,
+        planProgress,
+        customPlans,
+      }) =>
+        set({
+          accountName,
+          sessions,
+          planProgress,
+          customPlans,
+          lastSessionId: sessions[0]?.id ?? null,
         }),
     }),
     {

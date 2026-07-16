@@ -8,12 +8,12 @@ import { loadBible } from "@/lib/bible/load";
 import type { BibleData, LessonScope } from "@/lib/bible/types";
 import type { PlanDay } from "@/lib/plans/types";
 import { useScribeStore } from "@/lib/store/use-scribe-store";
+import { saveCustomPlan } from "@/lib/supabase/persist";
 import { uid } from "@/lib/utils";
 
 export default function NewPlanPage() {
   const router = useRouter();
   const version = useScribeStore((s) => s.preferences.version);
-  const addCustomPlan = useScribeStore((s) => s.addCustomPlan);
 
   const [bible, setBible] = useState<BibleData | null>(null);
   const [title, setTitle] = useState("");
@@ -66,7 +66,7 @@ export default function NewPlanPage() {
   function save() {
     if (!title.trim() || days.length === 0) return;
     const id = uid("plan");
-    addCustomPlan({
+    void saveCustomPlan({
       id,
       title: title.trim(),
       description: description.trim(),

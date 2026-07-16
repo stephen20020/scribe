@@ -2,7 +2,7 @@
 
 **Type the Word** — an elegant Bible typing experience.
 
-Frontend-only for now: pick a translation and reference, type a verse / passage / chapter, follow daily plans, and track stats locally in your browser.
+Pick a translation and reference, type a verse / passage / chapter, follow daily plans, and track stats. Guests keep progress on-device; accounts sync to Supabase.
 
 ## Translations
 
@@ -17,6 +17,7 @@ NIV / NKJV are copyrighted and are not included.
 ## Develop
 
 ```bash
+cp .env.example .env.local   # fill Supabase URL + anon key
 npm install
 npm run dev
 ```
@@ -25,4 +26,11 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Stack
 
-Next.js (App Router), TypeScript, Tailwind CSS, next-themes, Framer Motion, Zustand + localStorage.
+Next.js (App Router), TypeScript, Tailwind CSS, next-themes, Framer Motion, Zustand + localStorage, Supabase Auth + Postgres.
+
+## Deploy
+
+Hosted on Vercel. Env vars required:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`

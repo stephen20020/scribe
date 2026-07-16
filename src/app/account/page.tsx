@@ -5,37 +5,62 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { PageEnter } from "@/components/page-enter";
-import { useScribeStore } from "@/lib/store/use-scribe-store";
+import { useAuth } from "@/components/auth-provider";
 
 export default function AccountPage() {
   const router = useRouter();
-  const accountName = useScribeStore((s) => s.accountName);
-  const setAccountName = useScribeStore((s) => s.setAccountName);
+  const { user, loading, signIn, signUp, signOut } = useAuth();
   const [mode, setMode] = useState<"signin" | "signup">("signup");
-  const [name, setName] = useState(accountName ?? "");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) {
-      setMessage("Add a display name for the local account shell.");
+    setBusy(true);
+    setMessage(null);
+
+    if (mode === "signup") {
+      if (!name.trim()) {
+        setMessage("Add a display name.");
+        setBusy(false);
+        return;
+      }
+      const result = await signUp(email.trim(), password, name.trim());
+      setBusy(false);
+      if (result.error) {
+        setMessage(result.error);
+        return;
+      }
+      if (result.needsConfirm) {
+        setMessage(
+          "Check your email to confirm your account, then sign in.",
+        );
+        setMode("signin");
+        return;
+      }
+      setMessage("Welcome — your stats will sync to this account.");
+      window.setTimeout(() => router.push("/dashboard"), 600);
       return;
     }
-    setAccountName(name.trim());
-    setMessage(
-      mode === "signup"
-        ? "Account shell created on this device. Real auth comes later."
-        : "Signed in locally. Backend sync is not wired yet.",
-    );
-    window.setTimeout(() => router.push("/dashboard"), 700);
+
+    const result = await signIn(email.trim(), password);
+    setBusy(false);
+    if (result.error) {
+      setMessage(result.error);
+      return;
+    }
+    setMessage("Signed in. Syncing your progress…");
+    window.setTimeout(() => router.push("/dashboard"), 600);
   }
 
-  function signOut() {
-    setAccountName(null);
-    setName("");
-    setMessage("Signed out of the local shell.");
+  async function handleSignOut() {
+    setBusy(true);
+    await signOut();
+    setBusy(false);
+    setMessage("Signed out. Guest progress stays on this device.");
   }
 
   return (
@@ -43,20 +68,27 @@ export default function AccountPage() {
       <SiteHeader />
       <PageEnter className="mx-auto w-full max-w-md px-5 py-10 sm:px-8">
         <p className="font-mono text-[11px] tracking-[0.22em] text-ink-faint uppercase">
-          Account shell
+          Account
         </p>
         <h1 className="mt-2 font-display text-4xl tracking-tight">
-          {accountName ? "Your account" : mode === "signup" ? "Create account" : "Sign in"}
+          {loading
+            ? "Loading…"
+            : user
+              ? "Your account"
+              : mode === "signup"
+                ? "Create account"
+                : "Sign in"}
         </h1>
         <p className="mt-3 text-sm text-ink-muted">
-          Frontend only for now — no password is sent anywhere. Your typing
-          progress stays in this browser.
+          Guests can type anytime. An account saves stats and plans in the
+          cloud so they follow you across devices.
         </p>
 
-        {accountName ? (
+        {user ? (
           <div className="mt-10 space-y-4">
             <p className="text-ink">
-              Signed in as <strong>{accountName}</strong>
+              Signed in as{" "}
+              <strong>{user.email ?? user.id.slice(0, 8)}</strong>
             </p>
             <div className="flex flex-wrap gap-3">
               <Link
@@ -67,8 +99,9 @@ export default function AccountPage() {
               </Link>
               <button
                 type="button"
-                onClick={signOut}
-                className="rounded-full border border-line px-6 py-3 text-ink-muted hover:text-ink"
+                disabled={busy}
+                onClick={handleSignOut}
+                className="rounded-full border border-line px-6 py-3 text-ink-muted hover:text-ink disabled:opacity-50"
               >
                 Sign out
               </button>
@@ -102,15 +135,18 @@ export default function AccountPage() {
             </div>
 
             <form onSubmit={submit} className="mt-8 space-y-4">
-              <label className="block text-sm">
-                <span className="mb-2 block text-ink-muted">Display name</span>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-xl border border-line bg-bg-elevated/80 px-4 py-3 outline-none ring-accent focus:ring-2"
-                  autoComplete="nickname"
-                />
-              </label>
+              {mode === "signup" && (
+                <label className="block text-sm">
+                  <span className="mb-2 block text-ink-muted">Display name</span>
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full rounded-xl border border-line bg-bg-elevated/80 px-4 py-3 outline-none ring-accent focus:ring-2"
+                    autoComplete="nickname"
+                    required
+                  />
+                </label>
+              )}
               <label className="block text-sm">
                 <span className="mb-2 block text-ink-muted">Email</span>
                 <input
@@ -119,6 +155,7 @@ export default function AccountPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full rounded-xl border border-line bg-bg-elevated/80 px-4 py-3 outline-none ring-accent focus:ring-2"
                   autoComplete="email"
+                  required
                 />
               </label>
               <label className="block text-sm">
@@ -131,21 +168,26 @@ export default function AccountPage() {
                   autoComplete={
                     mode === "signup" ? "new-password" : "current-password"
                   }
+                  minLength={6}
+                  required
                 />
               </label>
               <button
                 type="submit"
-                className="w-full rounded-full bg-ink px-6 py-3.5 text-bg transition hover:opacity-90"
+                disabled={busy || loading}
+                className="w-full rounded-full bg-ink px-6 py-3.5 text-bg transition hover:opacity-90 disabled:opacity-50"
               >
-                {mode === "signup" ? "Create account" : "Sign in"}
+                {busy
+                  ? "Working…"
+                  : mode === "signup"
+                    ? "Create account"
+                    : "Sign in"}
               </button>
             </form>
           </>
         )}
 
-        {message && (
-          <p className="mt-6 text-sm text-accent">{message}</p>
-        )}
+        {message && <p className="mt-6 text-sm text-accent">{message}</p>}
 
         <p className="mt-10 text-sm text-ink-faint">
           Prefer to stay a guest?{" "}
