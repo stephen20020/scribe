@@ -11,6 +11,7 @@ import {
   pushCustomPlan,
   pushPlanProgress,
   pushSession,
+  pushTypingProfile,
 } from "./sync";
 
 async function currentUserId(): Promise<string | null> {
@@ -23,7 +24,11 @@ export async function saveSession(session: TypingSession) {
   useScribeStore.getState().addSession(session);
   const userId = await currentUserId();
   if (userId) {
-    await pushSession(userId, session).catch(() => {});
+    const profile = useScribeStore.getState().typingProfile;
+    await Promise.all([
+      pushSession(userId, session).catch(() => {}),
+      pushTypingProfile(userId, profile).catch(() => {}),
+    ]);
     if (session.planId && session.planDay) {
       // Local mark already done by caller in some paths; ensure cloud has progress
       const progress = useScribeStore.getState().planProgress[session.planId];
@@ -32,6 +37,13 @@ export async function saveSession(session: TypingSession) {
       }
     }
   }
+}
+
+export async function syncTypingProfile() {
+  const userId = await currentUserId();
+  if (!userId) return;
+  const profile = useScribeStore.getState().typingProfile;
+  await pushTypingProfile(userId, profile).catch(() => {});
 }
 
 export async function savePlanDayComplete(planId: string, day: number) {

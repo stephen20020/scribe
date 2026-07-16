@@ -16,6 +16,7 @@ import {
   pushCustomPlan,
   pushPlanProgress,
   pushSessions,
+  pushTypingProfile,
   upsertProfile,
 } from "@/lib/supabase/sync";
 import { useScribeStore } from "@/lib/store/use-scribe-store";
@@ -52,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Upload any guest progress once on login
       await Promise.all([
         pushSessions(nextUser.id, local.sessions).catch(() => {}),
+        pushTypingProfile(nextUser.id, local.typingProfile).catch(() => {}),
         ...Object.values(local.planProgress).map((p) =>
           pushPlanProgress(nextUser.id, p).catch(() => {}),
         ),
@@ -70,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         sessions: bundle.sessions,
         planProgress: bundle.planProgress,
         customPlans: bundle.customPlans,
+        typingProfile: bundle.typingProfile,
       });
     },
     [getLocalSnapshot, hydrateFromCloud],

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { PageEnter } from "@/components/page-enter";
+import { CoachCard } from "@/components/coach-card";
 import { STOCK_PLANS } from "@/lib/plans/stock";
 import {
   computeAggregates,
@@ -86,6 +87,8 @@ export default function DashboardPage() {
             value={`${aggregates.currentStreak} day${aggregates.currentStreak === 1 ? "" : "s"}`}
           />
         </div>
+
+        <CoachCard />
 
         <section className="mt-14 border-t border-line pt-10">
           <div className="flex items-baseline justify-between gap-4">

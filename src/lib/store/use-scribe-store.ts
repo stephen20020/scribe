@@ -10,6 +10,18 @@ import {
   type LessonScope,
 } from "../bible/types";
 import type { CustomPlan, PlanProgress } from "../plans/types";
+import {
+  rebuildTypingProfile,
+  summariesFromSessions,
+} from "../coach/profile";
+import { buildRulesCoach } from "../coach/rules";
+import {
+  emptyTypingProfile,
+  type MistakeSummary,
+  type TypingProfile,
+} from "../coach/types";
+
+export type { MistakeSummary, TypingProfile };
 
 export interface TypingSession {
   id: string;
@@ -29,6 +41,8 @@ export interface TypingSession {
   completedAt: string;
   planId?: string;
   planDay?: number;
+  /** Aggregate mistake patterns — never raw Scripture. */
+  mistakeSummary?: MistakeSummary | null;
 }
 
 /** Deep-link back into the same lesson (skips the scripture picker). */
@@ -58,11 +72,23 @@ export interface Preferences {
   passageLength: number;
 }
 
+function applyCoachToProfile(profile: TypingProfile): TypingProfile {
+  const coach = buildRulesCoach(profile);
+  return {
+    ...profile,
+    narrative: coach.narrative,
+    narrativeAt: new Date().toISOString(),
+    narrativeSource: "rules",
+    suggestedDrill: coach.suggestedDrill,
+  };
+}
+
 interface ScribeState {
   preferences: Preferences;
   sessions: TypingSession[];
   planProgress: Record<string, PlanProgress>;
   customPlans: CustomPlan[];
+  typingProfile: TypingProfile;
   lastSessionId: string | null;
   accountName: string | null;
   _hasHydrated: boolean;
@@ -73,6 +99,12 @@ interface ScribeState {
   setDefaultScope: (scope: LessonScope) => void;
   setPassageLength: (n: number) => void;
   addSession: (session: TypingSession) => void;
+  refreshTypingProfile: () => void;
+  setTypingProfileCoach: (patch: {
+    narrative: string;
+    narrativeSource: "rules" | "ai";
+    suggestedDrill: TypingProfile["suggestedDrill"];
+  }) => void;
   markPlanDayComplete: (planId: string, day: number) => void;
   addCustomPlan: (plan: CustomPlan) => void;
   removeCustomPlan: (id: string) => void;
@@ -82,12 +114,14 @@ interface ScribeState {
     sessions: TypingSession[];
     planProgress: Record<string, PlanProgress>;
     customPlans: CustomPlan[];
+    typingProfile: TypingProfile;
   };
   hydrateFromCloud: (payload: {
     accountName: string | null;
     sessions: TypingSession[];
     planProgress: Record<string, PlanProgress>;
     customPlans: CustomPlan[];
+    typingProfile?: TypingProfile | null;
   }) => void;
 }
 
@@ -152,6 +186,7 @@ export const useScribeStore = create<ScribeState>()(
       sessions: [],
       planProgress: {},
       customPlans: [],
+      typingProfile: emptyTypingProfile(),
       lastSessionId: null,
       accountName: null,
       _hasHydrated: false,
@@ -198,12 +233,43 @@ export const useScribeStore = create<ScribeState>()(
         })),
 
       addSession: (session) =>
+        set((s) => {
+          const sessions = [
+            session,
+            ...s.sessions.filter((x) => x.id !== session.id),
+          ].slice(0, 500);
+          const typingProfile = applyCoachToProfile(
+            rebuildTypingProfile(
+              summariesFromSessions(sessions),
+              s.typingProfile,
+            ),
+          );
+          return {
+            sessions,
+            lastSessionId: session.id,
+            typingProfile,
+          };
+        }),
+
+      refreshTypingProfile: () =>
         set((s) => ({
-          sessions: [session, ...s.sessions.filter((x) => x.id !== session.id)].slice(
-            0,
-            500,
+          typingProfile: applyCoachToProfile(
+            rebuildTypingProfile(
+              summariesFromSessions(s.sessions),
+              s.typingProfile,
+            ),
           ),
-          lastSessionId: session.id,
+        })),
+
+      setTypingProfileCoach: (patch) =>
+        set((s) => ({
+          typingProfile: {
+            ...s.typingProfile,
+            narrative: patch.narrative,
+            narrativeAt: new Date().toISOString(),
+            narrativeSource: patch.narrativeSource,
+            suggestedDrill: patch.suggestedDrill,
+          },
         })),
 
       markPlanDayComplete: (planId, day) =>
@@ -247,6 +313,7 @@ export const useScribeStore = create<ScribeState>()(
         set({
           sessions: [],
           lastSessionId: null,
+          typingProfile: emptyTypingProfile(),
         }),
 
       getLocalSnapshot: () => {
@@ -255,6 +322,7 @@ export const useScribeStore = create<ScribeState>()(
           sessions: s.sessions,
           planProgress: s.planProgress,
           customPlans: s.customPlans,
+          typingProfile: s.typingProfile,
         };
       },
 
@@ -263,13 +331,35 @@ export const useScribeStore = create<ScribeState>()(
         sessions,
         planProgress,
         customPlans,
+        typingProfile,
       }) =>
-        set({
-          accountName,
-          sessions,
-          planProgress,
-          customPlans,
-          lastSessionId: sessions[0]?.id ?? null,
+        set((s) => {
+          const rebuilt = applyCoachToProfile(
+            rebuildTypingProfile(
+              summariesFromSessions(sessions),
+              typingProfile ?? s.typingProfile,
+            ),
+          );
+          // Prefer fresher AI narrative from cloud when present
+          const merged =
+            typingProfile?.narrativeSource === "ai" && typingProfile.narrative
+              ? {
+                  ...rebuilt,
+                  narrative: typingProfile.narrative,
+                  narrativeAt: typingProfile.narrativeAt,
+                  narrativeSource: "ai" as const,
+                  suggestedDrill:
+                    typingProfile.suggestedDrill ?? rebuilt.suggestedDrill,
+                }
+              : rebuilt;
+          return {
+            accountName,
+            sessions,
+            planProgress,
+            customPlans,
+            typingProfile: merged,
+            lastSessionId: sessions[0]?.id ?? null,
+          };
         }),
     }),
     {
@@ -289,7 +379,14 @@ export const useScribeStore = create<ScribeState>()(
               DEFAULT_VERSION[state.preferences.language];
           }
         }
+        if (state && !state.typingProfile) {
+          state.typingProfile = emptyTypingProfile();
+        }
         state?.setHasHydrated(true);
+        // Rebuild coach from sessions after hydrate (older localStorage may lack profile)
+        queueMicrotask(() => {
+          useScribeStore.getState().refreshTypingProfile();
+        });
       },
     },
   ),

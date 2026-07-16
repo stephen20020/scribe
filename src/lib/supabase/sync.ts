@@ -1,7 +1,11 @@
 "use client";
 
 import type { CustomPlan, PlanProgress } from "@/lib/plans/types";
-import type { TypingSession } from "@/lib/store/use-scribe-store";
+import type {
+  TypingProfile,
+  TypingSession,
+} from "@/lib/store/use-scribe-store";
+import { parseMistakeSummary, parseTypingProfile } from "@/lib/coach/validate";
 import { createClient } from "./client";
 
 type SessionRow = {
@@ -22,6 +26,7 @@ type SessionRow = {
   completed_at: string;
   plan_id: string | null;
   plan_day: number | null;
+  mistake_summary?: unknown;
 };
 
 function toSession(row: SessionRow): TypingSession {
@@ -43,6 +48,7 @@ function toSession(row: SessionRow): TypingSession {
     completedAt: row.completed_at,
     planId: row.plan_id ?? undefined,
     planDay: row.plan_day ?? undefined,
+    mistakeSummary: parseMistakeSummary(row.mistake_summary),
   };
 }
 
@@ -51,24 +57,35 @@ export async function fetchAccountBundle(userId: string): Promise<{
   sessions: TypingSession[];
   planProgress: Record<string, PlanProgress>;
   customPlans: CustomPlan[];
+  typingProfile: TypingProfile | null;
 }> {
   const supabase = createClient();
 
-  const [profileRes, sessionsRes, progressRes, plansRes] = await Promise.all([
-    supabase.from("profiles").select("display_name").eq("id", userId).maybeSingle(),
-    supabase
-      .from("typing_sessions")
-      .select("*")
-      .eq("user_id", userId)
-      .order("completed_at", { ascending: false })
-      .limit(500),
-    supabase.from("plan_progress").select("*").eq("user_id", userId),
-    supabase
-      .from("custom_plans")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false }),
-  ]);
+  const [profileRes, sessionsRes, progressRes, plansRes, typingProfileRes] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", userId)
+        .maybeSingle(),
+      supabase
+        .from("typing_sessions")
+        .select("*")
+        .eq("user_id", userId)
+        .order("completed_at", { ascending: false })
+        .limit(500),
+      supabase.from("plan_progress").select("*").eq("user_id", userId),
+      supabase
+        .from("custom_plans")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("typing_profiles")
+        .select("profile")
+        .eq("user_id", userId)
+        .maybeSingle(),
+    ]);
 
   const planProgress: Record<string, PlanProgress> = {};
   for (const row of progressRes.data ?? []) {
@@ -90,9 +107,12 @@ export async function fetchAccountBundle(userId: string): Promise<{
 
   return {
     displayName: profileRes.data?.display_name ?? null,
-    sessions: (sessionsRes.data ?? []).map((row) => toSession(row as SessionRow)),
+    sessions: (sessionsRes.data ?? []).map((row) =>
+      toSession(row as SessionRow),
+    ),
     planProgress,
     customPlans,
+    typingProfile: parseTypingProfile(typingProfileRes.data?.profile),
   };
 }
 
@@ -125,6 +145,7 @@ export async function pushSession(userId: string, session: TypingSession) {
     completed_at: session.completedAt,
     plan_id: session.planId ?? null,
     plan_day: session.planDay ?? null,
+    mistake_summary: session.mistakeSummary ?? null,
   });
   if (error) throw error;
 }
@@ -152,8 +173,22 @@ export async function pushSessions(userId: string, sessions: TypingSession[]) {
       completed_at: session.completedAt,
       plan_id: session.planId ?? null,
       plan_day: session.planDay ?? null,
+      mistake_summary: session.mistakeSummary ?? null,
     })),
   );
+  if (error) throw error;
+}
+
+export async function pushTypingProfile(
+  userId: string,
+  profile: TypingProfile,
+) {
+  const supabase = createClient();
+  const { error } = await supabase.from("typing_profiles").upsert({
+    user_id: userId,
+    profile,
+    updated_at: new Date().toISOString(),
+  });
   if (error) throw error;
 }
 

@@ -32,6 +32,7 @@ import {
   normalizeTypingText,
 } from "@/lib/typing/normalize";
 import { RandomVerseButton } from "@/components/random-verse-button";
+import { createMistakeTracker } from "@/lib/coach/tracker";
 import { savePlanDayComplete, saveSession } from "@/lib/supabase/persist";
 import { formatDuration, uid, cn } from "@/lib/utils";
 
@@ -97,6 +98,7 @@ export function TypingLesson({
   const stageRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const finishedRef = useRef(false);
+  const mistakeTrackerRef = useRef(createMistakeTracker());
   const confirmEndRef = useRef(false);
   const suppressInputRef = useRef(false);
   const handledBeforeInputRef = useRef(false);
@@ -197,6 +199,7 @@ export function TypingLesson({
         completedAt: new Date().toISOString(),
         planId,
         planDay,
+        mistakeSummary: mistakeTrackerRef.current.summarize(),
       };
 
       void (async () => {
@@ -218,6 +221,7 @@ export function TypingLesson({
 
     function startLesson(lesson: LessonTarget) {
       if (cancelled) return;
+      mistakeTrackerRef.current.reset();
       const snapshot = createTypingState(lesson.text);
       stateRef.current = snapshot;
       targetRef.current = lesson;
@@ -326,7 +330,22 @@ export function TypingLesson({
         const wasCorrect =
           normalizeTypingChar(next.typed[oldCaret] ?? "") ===
           normalizeTypingChar(next.target[oldCaret] ?? "");
-        if (!wasCorrect) flashWrong();
+        if (!wasCorrect) {
+          const expected = next.target[oldCaret] ?? "";
+          const typed = next.typed[oldCaret] ?? "";
+          const atMs = Math.max(
+            0,
+            Date.now() - (next.startedAt ?? Date.now()) - next.pausedMs,
+          );
+          mistakeTrackerRef.current.record({
+            expected,
+            typed,
+            prev: oldCaret > 0 ? (next.target[oldCaret - 1] ?? null) : null,
+            atMs,
+            index: oldCaret,
+          });
+          flashWrong();
+        }
         paintChar(
           els[oldCaret],
           wasCorrect ? "correct" : "incorrect",
