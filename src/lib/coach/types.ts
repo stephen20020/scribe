@@ -43,6 +43,26 @@ export interface TypingProfile {
 
 export type CoachSeverity = "info" | "watch" | "focus";
 
+export interface DrillPhase {
+  id: "isolate" | "context" | "transfer";
+  label: string;
+  cue: string;
+  text: string;
+}
+
+export interface PracticeDeal {
+  id: string;
+  focus: string;
+  title: string;
+  why: string;
+  severity: CoachSeverity;
+  evidence: string[];
+  expectedChar?: string;
+  confusedWith?: string;
+  phases: DrillPhase[];
+  href: string;
+}
+
 export interface CoachInsight {
   id: string;
   headline: string;
@@ -54,6 +74,8 @@ export interface CoachInsight {
 
 export interface CoachResult {
   insights: CoachInsight[];
+  /** Actionable practice packs — one per issue */
+  deals: PracticeDeal[];
   narrative: string;
   source: "rules" | "ai";
   suggestedDrill: { label: string; href: string; focus: string } | null;

@@ -151,12 +151,28 @@ export async function POST(req: Request) {
       }
     : rules.suggestedDrill;
 
+  const deals = rules.deals.map((d) => ({
+    id: d.id,
+    focus: d.focus,
+    title: d.title,
+    why: d.why,
+    severity: d.severity,
+    evidence: d.evidence,
+    href: d.href,
+    phases: d.phases.map((p) => ({
+      id: p.id,
+      label: p.label,
+      cue: p.cue,
+    })),
+  }));
+
   try {
     const ai = await askClaude(payload);
     if (ai.ok) {
       return NextResponse.json({
         narrative: ai.text,
         insights: rules.insights,
+        deals,
         suggestedDrill,
         source: "ai" as const,
       });
@@ -164,6 +180,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       narrative: rules.narrative,
       insights: rules.insights,
+      deals,
       suggestedDrill,
       source: "rules" as const,
       aiError: ai.reason,
@@ -175,6 +192,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     narrative: rules.narrative,
     insights: rules.insights,
+    deals,
     suggestedDrill,
     source: "rules" as const,
   });

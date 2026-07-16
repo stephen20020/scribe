@@ -1,115 +1,157 @@
-import { drillHref, drillLabel } from "./drill";
-import { formatPairKey, type CoachInsight, type CoachResult, type TypingProfile } from "./types";
+import {
+  buildPracticeDeal,
+  drillHref,
+  drillLabel,
+  type PracticeDeal,
+} from "./drill";
+import {
+  formatPairKey,
+  type CoachInsight,
+  type CoachResult,
+  type TypingProfile,
+} from "./types";
 
-function pairDrill(key: string) {
+function linkFor(focus: string) {
   return {
-    label: drillLabel(key),
-    href: drillHref(key),
-    focus: key,
+    label: drillLabel(focus),
+    href: drillHref(focus),
+    focus,
   };
 }
 
 /** Deterministic coach — always available, feeds the same shape as AI. */
 export function buildRulesCoach(profile: TypingProfile): CoachResult {
   const insights: CoachInsight[] = [];
+  const deals: PracticeDeal[] = [];
 
   if (profile.sessionsSampled === 0 || profile.totalMistakes < 3) {
     return {
       insights: [],
+      deals: [],
       narrative:
-        "Type a few lessons and your coach will start spotting patterns in your mistakes.",
+        "Type a few lessons and your coach will start spotting patterns — then build custom practice deals for each one.",
       source: "rules",
       suggestedDrill: null,
     };
   }
 
-  const top = profile.topPairs[0];
-  if (top && top.count >= 3) {
-    insights.push({
-      id: `pair-${top.key}`,
-      headline: `Watch ${formatPairKey(top.key)}`,
-      detail: `When the text wants “${formatPairKey(top.key).split(">")[0] ?? "?"}”, you often hit the other key instead. Slow down just on that reach.`,
-      severity: top.count >= 10 ? "focus" : "watch",
+  // Top substitution pairs → each gets its own practice deal
+  for (const pair of profile.topPairs.slice(0, 4)) {
+    if (pair.count < 2) continue;
+    const deal = buildPracticeDeal({
+      focus: pair.key,
+      count: pair.count,
+      trend: pair.trend,
+      severity: pair.count >= 10 ? "focus" : "watch",
       evidence: [
-        `${formatPairKey(top.key)} ×${top.count} across ${profile.sessionsSampled} sessions`,
-        top.trend === "up" ? "Showing up more lately" : "Still in your top misses",
+        `${formatPairKey(pair.key)} ×${pair.count} across ${profile.sessionsSampled} sessions`,
+        pair.trend === "up"
+          ? "Rising lately"
+          : pair.trend === "down"
+            ? "Easing — keep the pressure on"
+            : "Still in your top misses",
       ],
-      drill: pairDrill(top.key),
+    });
+    deals.push(deal);
+    insights.push({
+      id: `pair-${pair.key}`,
+      headline: deal.title,
+      detail: deal.why,
+      severity: deal.severity,
+      evidence: deal.evidence,
+      drill: linkFor(pair.key),
     });
   }
 
   const bi = profile.topBigrams[0];
   if (bi && bi.count >= 3) {
-    const focus = top?.key ?? bi.key;
-    insights.push({
-      id: `bigram-${bi.key}`,
-      headline: "Letter-pair stumble",
-      detail:
-        "A repeating two-letter pattern is catching you. Practice that sequence as one motion instead of two separate keys.",
-      severity: "watch",
-      evidence: [`${formatPairKey(bi.key)} ×${bi.count}`],
-      drill: pairDrill(focus),
-    });
+    const digraphFocus = bi.key.includes(">")
+      ? (bi.key.split(">")[0]?.slice(-2) ?? bi.key)
+      : bi.key;
+    // Avoid duplicate if already covered by a pair deal
+    if (!deals.some((d) => d.focus === digraphFocus || d.id.includes(digraphFocus))) {
+      const deal = buildPracticeDeal({
+        focus: digraphFocus,
+        count: bi.count,
+        severity: "watch",
+        evidence: [`${formatPairKey(bi.key)} ×${bi.count}`],
+      });
+      deals.push(deal);
+      insights.push({
+        id: `bigram-${bi.key}`,
+        headline: deal.title,
+        detail: deal.why,
+        severity: deal.severity,
+        evidence: deal.evidence,
+        drill: linkFor(digraphFocus),
+      });
+    }
   }
 
   if (
     profile.punctuationErrors >= 4 &&
     profile.totalMistakes > 0 &&
-    profile.punctuationErrors / profile.totalMistakes >= 0.2
+    profile.punctuationErrors / profile.totalMistakes >= 0.18
   ) {
-    insights.push({
-      id: "punctuation",
-      headline: "Punctuation friction",
-      detail:
-        "A large share of your misses are commas, apostrophes, or similar marks — common in Scripture typing.",
+    const deal = buildPracticeDeal({
+      focus: "punctuation",
       severity: "focus",
       evidence: [
         `${profile.punctuationErrors} punctuation misses of ${profile.totalMistakes} total`,
       ],
-      drill: {
-        label: drillLabel("punctuation"),
-        href: drillHref("punctuation"),
-        focus: "punctuation",
-      },
+    });
+    deals.push(deal);
+    insights.push({
+      id: "punctuation",
+      headline: deal.title,
+      detail: deal.why,
+      severity: deal.severity,
+      evidence: deal.evidence,
+      drill: linkFor("punctuation"),
     });
   }
 
   if (
     profile.lateErrors >= 5 &&
-    profile.lateErrors > profile.earlyErrors * 1.4
+    profile.lateErrors > profile.earlyErrors * 1.35
   ) {
-    insights.push({
-      id: "fatigue",
-      headline: "Errors rise as you go",
-      detail:
-        "You start cleaner than you finish. Try shorter passages, or pause once when accuracy dips.",
+    const deal = buildPracticeDeal({
+      focus: "fatigue",
       severity: "info",
       evidence: [
         `${profile.earlyErrors} early vs ${profile.lateErrors} after the first minute`,
       ],
-      drill: {
-        label: drillLabel("fatigue"),
-        href: drillHref("fatigue"),
-        focus: "fatigue",
-      },
+    });
+    deals.push(deal);
+    insights.push({
+      id: "fatigue",
+      headline: deal.title,
+      detail: deal.why,
+      severity: deal.severity,
+      evidence: deal.evidence,
+      drill: linkFor("fatigue"),
     });
   }
 
-  const limited = insights.slice(0, 3);
-  const primary = limited.find((i) => i.severity)?.drill ?? limited[0]?.drill ?? null;
+  const limitedDeals = deals.slice(0, 5);
+  const limitedInsights = insights.slice(0, 5);
+  const primary = limitedDeals[0]
+    ? linkFor(limitedDeals[0].focus)
+    : null;
 
   const narrative =
-    limited.length === 0
-      ? "Keep typing — once a few patterns repeat, your coach will call them out here."
-      : limited.length === 1
-        ? `${limited[0].headline}. ${limited[0].detail}`
-        : `Your strongest signal is ${limited[0].headline.toLowerCase()}. ${limited[0].detail} Also worth watching: ${limited
+    limitedDeals.length === 0
+      ? "Keep typing — once a few patterns repeat, your coach will open practice deals here."
+      : limitedDeals.length === 1
+        ? `${limitedDeals[0].title}. ${limitedDeals[0].why}`
+        : `You have ${limitedDeals.length} custom practice deals. Start with ${limitedDeals[0].title.toLowerCase()} — ${limitedDeals[0].why} Also queued: ${limitedDeals
             .slice(1)
-            .map((i) => i.headline.toLowerCase())
+            .map((d) => d.title.toLowerCase())
             .join("; ")}.`;
 
   return {
-    insights: limited,
+    insights: limitedInsights,
+    deals: limitedDeals,
     narrative,
     source: "rules",
     suggestedDrill: primary,

@@ -1,40 +1,36 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { PageEnter } from "@/components/page-enter";
 import { TypingLesson } from "@/components/typing-lesson";
-import { buildDrillText, drillLabel } from "@/lib/coach/drill";
 
 const PANGRAM = "The quick brown fox jumps over the lazy dog.";
 
-const PUNCT_DRILL =
-  "Yes, Lord; 'tis so. Wait: hope! Faith, hope, love. Amen.";
-
-const FATIGUE_DRILL =
-  "Slow is smooth. Smooth is fast. Breathe, then type. Keep a steady pace.";
-
 function WarmUpInner() {
   const params = useSearchParams();
+  const router = useRouter();
   const mode = params.get("mode");
   const focus = params.get("focus");
 
-  const { text, label } = useMemo(() => {
-    if (mode !== "coach" || !focus) {
-      return { text: PANGRAM, label: "Warm-up · Pangram" };
+  // Legacy coach links → new practice deal page
+  useEffect(() => {
+    if (mode === "coach" && focus) {
+      const phase = params.get("phase");
+      const qs = new URLSearchParams({ focus });
+      if (phase) qs.set("phase", phase);
+      router.replace(`/coach/drill?${qs.toString()}`);
     }
-    if (focus === "punctuation") {
-      return { text: PUNCT_DRILL, label: drillLabel("punctuation") };
-    }
-    if (focus === "fatigue") {
-      return { text: FATIGUE_DRILL, label: drillLabel("fatigue") };
-    }
-    return {
-      text: buildDrillText([focus], 5),
-      label: drillLabel(focus),
-    };
-  }, [mode, focus]);
+  }, [mode, focus, params, router]);
+
+  if (mode === "coach" && focus) {
+    return (
+      <PageEnter className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8">
+        <p className="text-sm text-ink-muted">Opening practice deal…</p>
+      </PageEnter>
+    );
+  }
 
   return (
     <PageEnter className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8">
@@ -45,8 +41,8 @@ function WarmUpInner() {
         verse={1}
         scope="verse"
         passageLength={1}
-        practiceText={text}
-        practiceLabel={label}
+        practiceText={PANGRAM}
+        practiceLabel="Warm-up · Pangram"
       />
     </PageEnter>
   );
