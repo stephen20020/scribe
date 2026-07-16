@@ -26,12 +26,12 @@ export default function PlanDetailPage() {
     return (
       <div className="relative z-10 min-h-screen">
         <SiteHeader />
-        <div className="px-8 py-16">
+        <main className="px-8 py-16">
           <p className="text-ink-muted">Plan not found.</p>
           <Link href="/plans" className="mt-4 inline-block text-ink underline">
             Back to plans
           </Link>
-        </div>
+        </main>
       </div>
     );
   }
@@ -66,6 +66,7 @@ export default function PlanDetailPage() {
   return (
     <div className="relative z-10 min-h-screen">
       <SiteHeader />
+      <main>
       <PageEnter className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
         <Link
           href="/plans"
@@ -143,6 +144,7 @@ export default function PlanDetailPage() {
           })}
         </ol>
       </PageEnter>
+      </main>
     </div>
   );
 }

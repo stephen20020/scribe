@@ -18,37 +18,43 @@ export function SiteHeader({ transparent = false }: { transparent?: boolean }) {
   return (
     <header
       className={cn(
-        "relative z-20 flex items-center justify-between gap-4 px-5 py-5 sm:px-8",
+        "relative z-20 flex items-center justify-between gap-3 px-4 py-4 sm:gap-4 sm:px-8 sm:py-5",
         !transparent && "border-b border-line/70",
       )}
     >
-      <Link href="/" className="font-display text-2xl tracking-tight text-ink">
+      <Link
+        href="/"
+        className="shrink-0 font-display text-xl tracking-tight text-ink sm:text-2xl"
+      >
         Scribe
       </Link>
 
-      <nav className="flex items-center gap-3 text-sm text-ink-muted sm:gap-6">
-        {links.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className={cn(
-              "transition hover:text-ink",
-              pathname === link.href || pathname.startsWith(`${link.href}/`)
-                ? "text-ink"
-                : "max-sm:sr-only",
-              link.href === "/type" && "max-sm:not-sr-only",
-              link.href === "/plans" && "max-sm:not-sr-only",
-            )}
-          >
-            {link.label}
-          </Link>
-        ))}
+      <nav
+        className="flex items-center gap-2.5 text-[12px] text-ink-muted sm:gap-6 sm:text-sm"
+        aria-label="Primary"
+      >
+        {links.map((link) => {
+          const active =
+            pathname === link.href || pathname.startsWith(`${link.href}/`);
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={cn(
+                "transition hover:text-ink",
+                active ? "text-ink" : undefined,
+              )}
+            >
+              {link.label}
+            </Link>
+          );
+        })}
       </nav>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <Link
           href="/account"
-          className="text-sm text-ink-muted transition hover:text-ink"
+          className="text-[12px] text-ink-muted transition hover:text-ink sm:text-sm"
         >
           Account
         </Link>

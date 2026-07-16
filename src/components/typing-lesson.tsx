@@ -80,6 +80,7 @@ export function TypingLesson({
   const [live, setLive] = useState<LiveStats | null>(null);
   const [ready, setReady] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
+  const [typingStarted, setTypingStarted] = useState(false);
 
   const stateRef = useRef<TypingSnapshot | null>(null);
   const targetRef = useRef<LessonTarget | null>(null);
@@ -216,6 +217,7 @@ export function TypingLesson({
       setTarget(lesson);
       setIsPaused(false);
       setConfirmEnd(false);
+      setTypingStarted(false);
       setError(null);
       setLive(getLiveStats(snapshot));
       setReady(true);
@@ -301,6 +303,7 @@ export function TypingLesson({
       const next = handleKey(prev, key);
       if (next === prev) return;
 
+      if (!prev.startedAt && next.startedAt) setTypingStarted(true);
       lastKeyAtRef.current = Date.now();
 
       const oldCaret = prev.caret;
@@ -553,7 +556,11 @@ export function TypingLesson({
   }, [target]);
 
   if (error) {
-    return <p className="text-center text-incorrect">{error}</p>;
+    return (
+      <p className="text-center text-incorrect" role="alert">
+        {error}
+      </p>
+    );
   }
 
   if (!target || !ready || !live) {
@@ -563,7 +570,7 @@ export function TypingLesson({
   }
 
   function switchVersion(next: BibleVersionId) {
-    if (next === version) return;
+    if (next === version || typingStarted) return;
     setPreferredVersion(next);
     const params = new URLSearchParams({
       version: next,
@@ -577,7 +584,7 @@ export function TypingLesson({
     if (planId) params.set("planId", planId);
     if (planDay != null) params.set("planDay", String(planDay));
     if (isRandom) params.set("random", "1");
-    router.replace(`/type?${params.toString()}`);
+    router.push(`/type?${params.toString()}`);
   }
 
   return (
@@ -596,22 +603,33 @@ export function TypingLesson({
               role="group"
               aria-label="Translation"
             >
-              {BIBLE_VERSIONS.map((v) => (
-                <button
-                  key={v.id}
-                  type="button"
-                  onMouseDown={retainFocus}
-                  onClick={() => switchVersion(v.id)}
-                  className={cn(
-                    "rounded-full border px-3 py-1.5 font-mono text-[11px] tracking-wider uppercase transition",
-                    version === v.id
-                      ? "border-accent bg-accent-soft text-ink"
-                      : "border-line text-ink-muted hover:text-ink",
-                  )}
-                >
-                  {v.short}
-                </button>
-              ))}
+              {BIBLE_VERSIONS.map((v) => {
+                const selected = version === v.id;
+                const locked = typingStarted && !selected;
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={locked}
+                    title={
+                      locked
+                        ? "Translation is locked after you start typing"
+                        : undefined
+                    }
+                    onClick={() => switchVersion(v.id)}
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 font-mono text-[11px] tracking-wider uppercase transition",
+                      selected
+                        ? "border-accent bg-accent-soft text-ink"
+                        : "border-line text-ink-muted hover:text-ink",
+                      locked && "cursor-not-allowed opacity-40 hover:text-ink-muted",
+                    )}
+                  >
+                    {v.short}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -723,6 +741,8 @@ export function TypingLesson({
           tabIndex={0}
           onBeforeInput={onBeforeInput}
           onInput={onCaptureInput}
+          onPaste={(e) => e.preventDefault()}
+          onDrop={(e) => e.preventDefault()}
           onFocus={() => setInputFocused(true)}
           onBlur={() => setInputFocused(false)}
         />

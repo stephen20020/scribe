@@ -20,10 +20,38 @@ const mono = IBM_Plex_Mono({
   weight: ["400", "500"],
 });
 
+const siteUrl = "https://scribe-sigma.vercel.app";
+
 export const metadata: Metadata = {
-  title: "Scribe — Type the Word",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Scribe — Type the Word",
+    template: "%s · Scribe",
+  },
   description:
     "An elegant place to type Scripture. Choose a verse, passage, or chapter. Track your progress.",
+  applicationName: "Scribe",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    url: siteUrl,
+    siteName: "Scribe",
+    title: "Scribe — Type the Word",
+    description:
+      "An elegant place to type Scripture. Choose a verse, passage, or chapter. Track your progress.",
+  },
+  twitter: {
+    card: "summary",
+    title: "Scribe — Type the Word",
+    description:
+      "An elegant place to type Scripture. Choose a verse, passage, or chapter. Track your progress.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({

@@ -31,6 +31,7 @@ export default function DashboardPage() {
   return (
     <div className="relative z-10 min-h-screen">
       <SiteHeader />
+      <main>
       <PageEnter className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
         <p className="font-mono text-[11px] tracking-[0.22em] text-ink-faint uppercase">
           {accountName ? "Account" : "Guest"}
@@ -184,6 +185,7 @@ export default function DashboardPage() {
           </Link>
         </div>
       </PageEnter>
+      </main>
     </div>
   );
 }

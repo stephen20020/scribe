@@ -27,6 +27,9 @@ export interface TypingSession {
 
 /** Deep-link back into the same lesson (skips the scripture picker). */
 export function typingSessionHref(session: TypingSession): string {
+  if (session.book === "Practice") {
+    return "/warm-up";
+  }
   const passage = Math.max(1, session.endVerse - session.startVerse + 1);
   const params = new URLSearchParams({
     version: session.version,

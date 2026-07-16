@@ -80,6 +80,7 @@ export default function NewPlanPage() {
   return (
     <div className="relative z-10 min-h-screen">
       <SiteHeader />
+      <main>
       <PageEnter className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-8">
         <p className="font-mono text-[11px] tracking-[0.22em] text-ink-faint uppercase">
           Custom
@@ -235,6 +236,7 @@ export default function NewPlanPage() {
           </button>
         </div>
       </PageEnter>
+      </main>
     </div>
   );
 }

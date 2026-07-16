@@ -1,5 +1,7 @@
 export function formatDuration(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
+  if (ms <= 0) return "0s";
+  if (ms < 1000) return "<1s";
+  const totalSec = Math.round(ms / 1000);
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;
   if (m === 0) return `${s}s`;

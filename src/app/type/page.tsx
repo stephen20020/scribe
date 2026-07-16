@@ -77,13 +77,15 @@ export default function TypePage() {
   return (
     <div className="relative z-10 min-h-screen">
       <SiteHeader />
-      <Suspense
-        fallback={
-          <p className="px-8 py-16 text-ink-muted">Loading…</p>
-        }
-      >
-        <TypeContent />
-      </Suspense>
+      <main>
+        <Suspense
+          fallback={
+            <p className="px-8 py-16 text-ink-muted">Loading…</p>
+          }
+        >
+          <TypeContent />
+        </Suspense>
+      </main>
     </div>
   );
 }

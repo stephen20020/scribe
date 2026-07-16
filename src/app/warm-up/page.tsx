@@ -11,18 +11,20 @@ export default function WarmUpPage() {
   return (
     <div className="relative z-10 min-h-screen">
       <SiteHeader />
-      <PageEnter className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8">
-        <TypingLesson
-          version="web"
-          book="Practice"
-          chapter={1}
-          verse={1}
-          scope="verse"
-          passageLength={1}
-          practiceText={PANGRAM}
-          practiceLabel="Warm-up · Pangram"
-        />
-      </PageEnter>
+      <main>
+        <PageEnter className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8">
+          <TypingLesson
+            version="web"
+            book="Practice"
+            chapter={1}
+            verse={1}
+            scope="verse"
+            passageLength={1}
+            practiceText={PANGRAM}
+            practiceLabel="Warm-up · Pangram"
+          />
+        </PageEnter>
+      </main>
     </div>
   );
 }

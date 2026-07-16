@@ -28,6 +28,11 @@ export default function AccountPage() {
         setBusy(false);
         return;
       }
+      if (password.length < 8) {
+        setMessage("Password must be at least 8 characters.");
+        setBusy(false);
+        return;
+      }
       const result = await signUp(email.trim(), password, name.trim());
       setBusy(false);
       if (result.error) {
@@ -66,6 +71,7 @@ export default function AccountPage() {
   return (
     <div className="relative z-10 min-h-screen">
       <SiteHeader />
+      <main>
       <PageEnter className="mx-auto w-full max-w-md px-5 py-10 sm:px-8">
         <p className="font-mono text-[11px] tracking-[0.22em] text-ink-faint uppercase">
           Account
@@ -168,9 +174,14 @@ export default function AccountPage() {
                   autoComplete={
                     mode === "signup" ? "new-password" : "current-password"
                   }
-                  minLength={6}
+                  minLength={mode === "signup" ? 8 : 6}
                   required
                 />
+                {mode === "signup" && (
+                  <span className="mt-1.5 block text-xs text-ink-faint">
+                    At least 8 characters.
+                  </span>
+                )}
               </label>
               <button
                 type="submit"
@@ -187,7 +198,11 @@ export default function AccountPage() {
           </>
         )}
 
-        {message && <p className="mt-6 text-sm text-accent">{message}</p>}
+        {message && (
+          <p className="mt-6 text-sm text-accent" role="status" aria-live="polite">
+            {message}
+          </p>
+        )}
 
         <p className="mt-10 text-sm text-ink-faint">
           Prefer to stay a guest?{" "}
@@ -197,6 +212,7 @@ export default function AccountPage() {
           .
         </p>
       </PageEnter>
+      </main>
     </div>
   );
 }

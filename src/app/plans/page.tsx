@@ -14,6 +14,7 @@ export default function PlansPage() {
   return (
     <div className="relative z-10 min-h-screen">
       <SiteHeader />
+      <main>
       <PageEnter className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -113,6 +114,7 @@ export default function PlansPage() {
           )}
         </section>
       </PageEnter>
+      </main>
     </div>
   );
 }

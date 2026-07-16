@@ -168,6 +168,7 @@ export function ScripturePicker({
               <button
                 key={v.id}
                 type="button"
+                aria-pressed={version === v.id}
                 onClick={() => {
                   setLocalVersion(v.id);
                   setVersion(v.id);
@@ -216,7 +217,11 @@ export function ScripturePicker({
         {!bible && !error && (
           <p className="text-sm text-ink-muted">Loading scripture…</p>
         )}
-        {error && <p className="text-sm text-incorrect">{error}</p>}
+        {error && (
+          <p className="text-sm text-incorrect" role="alert" aria-live="assertive">
+            {error}
+          </p>
+        )}
 
         {bible && selectedBook && (
           <>
@@ -292,6 +297,7 @@ export function ScripturePicker({
                   <button
                     key={value}
                     type="button"
+                    aria-pressed={scope === value}
                     onClick={() => setScope(value)}
                     className={cn(
                       "rounded-full border px-4 py-2 text-sm transition",

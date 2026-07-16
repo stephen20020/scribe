@@ -63,14 +63,17 @@ export function countCorrectChars(state: TypingSnapshot): number {
   return n;
 }
 
+/** Floor used so sub-second finishes don't report 0 WPM. */
+const MIN_WPM_MS = 1000;
+
 export function getLiveStats(
   state: TypingSnapshot,
   now = Date.now(),
 ): LiveStats {
   const elapsedMs = activeElapsed(state, now);
-  const minutes = elapsedMs / 60000;
+  const minutes = Math.max(elapsedMs, MIN_WPM_MS) / 60000;
   const correctChars = countCorrectChars(state);
-  const wpm = minutes > 0 ? Math.round(correctChars / 5 / minutes) : 0;
+  const wpm = Math.round(correctChars / 5 / minutes);
   const accuracy =
     state.totalKeystrokes > 0
       ? Math.round(
