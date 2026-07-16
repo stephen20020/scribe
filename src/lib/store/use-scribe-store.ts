@@ -25,6 +25,23 @@ export interface TypingSession {
   planDay?: number;
 }
 
+/** Deep-link back into the same lesson (skips the scripture picker). */
+export function typingSessionHref(session: TypingSession): string {
+  const passage = Math.max(1, session.endVerse - session.startVerse + 1);
+  const params = new URLSearchParams({
+    version: session.version,
+    book: session.book,
+    chapter: String(session.chapter),
+    verse: String(session.startVerse),
+    scope: session.scope,
+    passage: String(passage),
+    go: "1",
+  });
+  if (session.planId) params.set("planId", session.planId);
+  if (session.planDay != null) params.set("planDay", String(session.planDay));
+  return `/type?${params.toString()}`;
+}
+
 export interface Preferences {
   version: BibleVersionId;
   defaultScope: LessonScope;

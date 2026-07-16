@@ -8,6 +8,7 @@ import { SiteHeader } from "@/components/site-header";
 import { PageEnter } from "@/components/page-enter";
 import {
   computeAggregates,
+  typingSessionHref,
   useScribeStore,
 } from "@/lib/store/use-scribe-store";
 import { formatDuration } from "@/lib/utils";
@@ -56,7 +57,7 @@ function StatsContent() {
 
           <div className="mt-10 flex flex-wrap gap-3">
             <Link
-              href="/type"
+              href={typingSessionHref(session)}
               className="rounded-full bg-ink px-6 py-3 text-bg transition hover:opacity-90"
             >
               Type again
