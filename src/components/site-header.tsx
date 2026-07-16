@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "./theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +14,7 @@ const links = [
 
 export function SiteHeader({ transparent = false }: { transparent?: boolean }) {
   const pathname = usePathname();
+  const router = useRouter();
 
   return (
     <header
@@ -40,6 +41,15 @@ export function SiteHeader({ transparent = false }: { transparent?: boolean }) {
             <Link
               key={link.href}
               href={link.href}
+              onClick={(e) => {
+                // App Router often no-ops same-path links, leaving sticky
+                // ?go=1 lesson params in place. Force a clean URL for Type.
+                if (link.href === "/type" && pathname === "/type") {
+                  e.preventDefault();
+                  router.replace("/type");
+                  router.refresh();
+                }
+              }}
               className={cn(
                 "transition hover:text-ink",
                 active ? "text-ink" : undefined,

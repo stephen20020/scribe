@@ -14,7 +14,9 @@ import {
 
 function TypeContent() {
   const params = useSearchParams();
-  const go = params.get("go") === "1";
+  const paramsKey = params.toString();
+  // Require an explicit book so a bare ?go=1 can't dump users into John 3:16.
+  const go = params.get("go") === "1" && Boolean(params.get("book"));
 
   const version = (
     isBibleVersionId(params.get("version"))
@@ -41,7 +43,10 @@ function TypeContent() {
   const lessonKey = `${version}:${book}:${safeChapter}:${safeVerse}:${scope}:${safePassage}:${planId ?? ""}:${planDay ?? ""}:${isRandom ? "r" : ""}`;
 
   return (
-    <PageEnter className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8">
+    <PageEnter
+      key={paramsKey || "picker"}
+      className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8"
+    >
       {go ? (
         <TypingLesson
           key={lessonKey}

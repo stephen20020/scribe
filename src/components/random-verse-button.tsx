@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { loadBible } from "@/lib/bible/load";
 import { pickRandomVerse, randomVerseHref } from "@/lib/bible/random";
 import {
@@ -27,7 +26,6 @@ export function RandomVerseButton({
   language?: BibleLanguageId;
   replace?: boolean;
 }) {
-  const router = useRouter();
   const preferredVersion = useScribeStore((s) => s.preferences.version);
   const preferredLanguage = useScribeStore((s) => s.preferences.language);
   const [busy, setBusy] = useState(false);
@@ -55,12 +53,17 @@ export function RandomVerseButton({
     try {
       const bible = await loadBible(resolvedVersion);
       const pick = pickRandomVerse(bible);
+      if (!pick.book || !pick.chapter || !pick.verse) {
+        throw new Error("Could not pick a verse");
+      }
       const href = randomVerseHref(resolvedVersion, pick);
-      if (replace) router.replace(href);
-      else router.push(href);
+      // Hard navigation avoids sticky App Router search-param state on /type.
+      if (replace) {
+        window.location.replace(href);
+      } else {
+        window.location.assign(href);
+      }
     } catch {
-      // keep user unblocked if load/navigation fails
-    } finally {
       setBusy(false);
     }
   }

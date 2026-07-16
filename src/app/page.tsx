@@ -34,6 +34,7 @@ export default function HomePage() {
           <div className="mt-10 flex flex-wrap items-center gap-4">
             <Link
               href="/type"
+              prefetch={false}
               className="rounded-full bg-ink px-8 py-3.5 font-display text-lg text-bg transition hover:opacity-90"
             >
               Start typing

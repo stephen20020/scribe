@@ -384,7 +384,8 @@ export function TypingLesson({
     if (!snap || !lesson) return;
 
     if (!snap.startedAt && snap.caret === 0) {
-      router.push(practiceText ? "/dashboard" : "/type");
+      if (practiceText) router.push("/dashboard");
+      else window.location.assign("/type");
       return;
     }
 
