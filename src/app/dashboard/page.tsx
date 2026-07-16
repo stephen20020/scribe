@@ -40,8 +40,8 @@ export default function DashboardPage() {
         </h1>
         <p className="mt-3 text-ink-muted">
           {accountName
-            ? "Your stats live on this device until sync is wired up."
-            : "Progress is saved on this device. Create an account shell anytime."}
+            ? "Your stats sync with your account across devices."
+            : "Progress is saved on this device. Create an account to sync."}
         </p>
 
         {!accountName && (
@@ -49,9 +49,27 @@ export default function DashboardPage() {
             href="/account"
             className="mt-6 inline-block text-sm text-accent underline underline-offset-4"
           >
-            Set up account shell →
+            Create account →
           </Link>
         )}
+
+        <section className="mt-10 border-t border-line pt-8">
+          <p className="font-mono text-[11px] tracking-[0.18em] text-ink-faint uppercase">
+            Warm-up
+          </p>
+          <h2 className="mt-2 font-display text-2xl tracking-tight">
+            The quick brown fox
+          </h2>
+          <p className="mt-2 max-w-md text-sm text-ink-muted">
+            A classic pangram to loosen your fingers before Scripture.
+          </p>
+          <Link
+            href="/warm-up"
+            className="mt-5 inline-flex rounded-full bg-ink px-6 py-3 text-sm text-bg transition hover:opacity-90"
+          >
+            Start pangram test
+          </Link>
+        </section>
 
         <div className="mt-12 grid grid-cols-2 gap-6 sm:grid-cols-3">
           <DashStat label="Verses typed" value={String(aggregates.totalVerses)} />
@@ -151,6 +169,12 @@ export default function DashboardPage() {
             className="rounded-full bg-ink px-6 py-3 text-bg"
           >
             Type now
+          </Link>
+          <Link
+            href="/warm-up"
+            className="rounded-full border border-line px-6 py-3 text-ink-muted hover:text-ink"
+          >
+            Pangram warm-up
           </Link>
           <Link
             href="/plans"

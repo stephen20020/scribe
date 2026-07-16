@@ -1,3 +1,9 @@
+import { normalizeTypingChar } from "./normalize";
+
+function charsMatch(typed: string, expected: string): boolean {
+  return normalizeTypingChar(typed) === normalizeTypingChar(expected);
+}
+
 export interface TypingSnapshot {
   target: string;
   caret: number;
@@ -24,7 +30,7 @@ export interface LiveStats {
 
 export function createTypingState(target: string): TypingSnapshot {
   return {
-    target,
+    target: [...target].map(normalizeTypingChar).join(""),
     caret: 0,
     typed: "",
     correct: 0,
@@ -52,7 +58,7 @@ export function countCorrectChars(state: TypingSnapshot): number {
   const len = Math.min(state.typed.length, state.target.length);
   let n = 0;
   for (let i = 0; i < len; i++) {
-    if (state.typed[i] === state.target[i]) n += 1;
+    if (charsMatch(state.typed[i], state.target[i])) n += 1;
   }
   return n;
 }
@@ -96,8 +102,10 @@ export function handleKey(
   if (key === "Backspace") {
     if (state.caret === 0) return state;
     const nextCaret = state.caret - 1;
-    const removedWasCorrect =
-      state.typed[nextCaret] === state.target[nextCaret];
+    const removedWasCorrect = charsMatch(
+      state.typed[nextCaret] ?? "",
+      state.target[nextCaret] ?? "",
+    );
     return {
       ...state,
       caret: nextCaret,
@@ -114,7 +122,7 @@ export function handleKey(
 
   const startedAt = state.startedAt ?? now;
   const expected = state.target[state.caret];
-  const isCorrect = key === expected;
+  const isCorrect = charsMatch(key, expected);
   const nextCaret = state.caret + 1;
   const typed = state.typed + key;
   const correct = state.correct + (isCorrect ? 1 : 0);

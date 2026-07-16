@@ -22,6 +22,7 @@ import {
   type TypingSnapshot,
 } from "@/lib/typing/engine";
 import { charClassName, paintChar, scrollCaretIntoBand } from "@/lib/typing/dom";
+import { normalizeTypingChar } from "@/lib/typing/normalize";
 import { savePlanDayComplete, saveSession } from "@/lib/supabase/persist";
 import { formatDuration, uid, cn } from "@/lib/utils";
 
@@ -37,6 +38,8 @@ export function TypingLesson({
   passageLength,
   planId,
   planDay,
+  practiceText,
+  practiceLabel,
 }: {
   version: BibleVersionId;
   book: string;
@@ -46,6 +49,8 @@ export function TypingLesson({
   passageLength: number;
   planId?: string;
   planDay?: number;
+  practiceText?: string;
+  practiceLabel?: string;
 }) {
   const router = useRouter();
   const setPreferredVersion = useScribeStore((s) => s.setVersion);
@@ -172,6 +177,39 @@ export function TypingLesson({
     finishedRef.current = false;
     charElsRef.current = [];
 
+    function startLesson(lesson: LessonTarget) {
+      if (cancelled) return;
+      const snapshot = createTypingState(lesson.text);
+      stateRef.current = snapshot;
+      targetRef.current = lesson;
+      setTarget(lesson);
+      setIsPaused(false);
+      setConfirmEnd(false);
+      setError(null);
+      setLive(getLiveStats(snapshot));
+      setReady(true);
+    }
+
+    if (practiceText && practiceLabel) {
+      startLesson({
+        version,
+        book: "Practice",
+        chapter: 1,
+        startVerse: 1,
+        endVerse: 1,
+        scope: "verse",
+        verses: [{ verse: 1, text: practiceText }],
+        text: practiceText,
+        referenceLabel: practiceLabel,
+      });
+      return () => {
+        cancelled = true;
+        if (statsTimerRef.current != null) window.clearTimeout(statsTimerRef.current);
+        if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current);
+        if (flashTimerRef.current != null) window.clearTimeout(flashTimerRef.current);
+      };
+    }
+
     loadBible(version)
       .then((bible) => {
         if (cancelled) return;
@@ -186,15 +224,7 @@ export function TypingLesson({
           setError("Could not build that lesson.");
           return;
         }
-        const snapshot = createTypingState(lesson.text);
-        stateRef.current = snapshot;
-        targetRef.current = lesson;
-        setTarget(lesson);
-        setIsPaused(false);
-        setConfirmEnd(false);
-        setError(null);
-        setLive(getLiveStats(snapshot));
-        setReady(true);
+        startLesson(lesson);
       })
       .catch(() => {
         if (!cancelled) setError("Failed to load scripture.");
@@ -206,7 +236,7 @@ export function TypingLesson({
       if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current);
       if (flashTimerRef.current != null) window.clearTimeout(flashTimerRef.current);
     };
-  }, [version, book, chapter, verse, scope, passageLength]);
+  }, [version, book, chapter, verse, scope, passageLength, practiceText, practiceLabel]);
 
   // Paint initial caret once spans mount
   useEffect(() => {
@@ -253,7 +283,9 @@ export function TypingLesson({
           /\s/.test(next.target[newCaret] ?? ""),
         );
       } else {
-        const wasCorrect = next.typed[oldCaret] === next.target[oldCaret];
+        const wasCorrect =
+          normalizeTypingChar(next.typed[oldCaret] ?? "") ===
+          normalizeTypingChar(next.target[oldCaret] ?? "");
         if (!wasCorrect) flashWrong();
         paintChar(
           els[oldCaret],
@@ -308,7 +340,7 @@ export function TypingLesson({
     if (!snap || !lesson) return;
 
     if (!snap.startedAt && snap.caret === 0) {
-      router.push("/type");
+      router.push(practiceText ? "/dashboard" : "/type");
       return;
     }
 
@@ -416,27 +448,29 @@ export function TypingLesson({
           <h1 className="mt-1 font-display text-3xl tracking-tight sm:text-4xl">
             {target.referenceLabel}
           </h1>
-          <div
-            className="mt-3 flex flex-wrap gap-2"
-            role="group"
-            aria-label="Translation"
-          >
-            {BIBLE_VERSIONS.map((v) => (
-              <button
-                key={v.id}
-                type="button"
-                onClick={() => switchVersion(v.id)}
-                className={cn(
-                  "rounded-full border px-3 py-1.5 font-mono text-[11px] tracking-wider uppercase transition",
-                  version === v.id
-                    ? "border-accent bg-accent-soft text-ink"
-                    : "border-line text-ink-muted hover:text-ink",
-                )}
-              >
-                {v.short}
-              </button>
-            ))}
-          </div>
+          {!practiceText && (
+            <div
+              className="mt-3 flex flex-wrap gap-2"
+              role="group"
+              aria-label="Translation"
+            >
+              {BIBLE_VERSIONS.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => switchVersion(v.id)}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 font-mono text-[11px] tracking-wider uppercase transition",
+                    version === v.id
+                      ? "border-accent bg-accent-soft text-ink"
+                      : "border-line text-ink-muted hover:text-ink",
+                  )}
+                >
+                  {v.short}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap gap-4 font-mono text-xs tracking-wide text-ink-muted uppercase">
           <Stat label="WPM" value={String(live.wpm)} />

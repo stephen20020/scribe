@@ -1,4 +1,5 @@
 import { getBook } from "./load";
+import { normalizeTypingText } from "@/lib/typing/normalize";
 import type {
   BibleData,
   BibleVersionId,
@@ -183,14 +184,19 @@ export function buildLessonTarget(
 
   const verses = [];
   for (let v = startVerse; v <= resolvedEnd; v++) {
-    verses.push({ verse: v, text: chapterVerses[v - 1] });
+    verses.push({
+      verse: v,
+      text: normalizeTypingText(chapterVerses[v - 1]),
+    });
   }
 
-  const text = verses
-    .map((v) => v.text.trim())
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const text = normalizeTypingText(
+    verses
+      .map((v) => v.text.trim())
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
 
   return {
     version: bible.version as BibleVersionId,
