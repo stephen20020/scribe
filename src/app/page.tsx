@@ -38,7 +38,11 @@ export default function HomePage() {
             >
               Start typing
             </Link>
-            <RandomVerseButton className="rounded-full border border-line px-6 py-3.5 text-sm text-ink-muted transition hover:text-ink" />
+            <RandomVerseButton
+              language="en"
+              label="Type a random verse"
+              className="rounded-full border border-line px-6 py-3.5 text-sm text-ink-muted transition hover:text-ink"
+            />
             <Link
               href="/plans"
               className="rounded-full border border-line px-6 py-3.5 text-sm text-ink-muted transition hover:text-ink"
@@ -48,7 +52,7 @@ export default function HomePage() {
           </div>
 
           <p className="mt-14 font-mono text-[11px] tracking-[0.18em] text-ink-faint uppercase">
-            WEB · KJV · ASV — open translations
+            EN · ES — open translations
           </p>
         </PageEnter>
       </main>

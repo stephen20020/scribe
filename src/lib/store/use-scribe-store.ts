@@ -275,10 +275,19 @@ export const useScribeStore = create<ScribeState>()(
     {
       name: "scribe-storage-v1",
       onRehydrateStorage: () => (state) => {
-        if (state?.preferences && !state.preferences.language) {
-          state.preferences.language = languageForVersion(
-            state.preferences.version,
-          );
+        if (state?.preferences) {
+          if (!state.preferences.language) {
+            state.preferences.language = languageForVersion(
+              state.preferences.version,
+            );
+          } else if (
+            languageForVersion(state.preferences.version) !==
+            state.preferences.language
+          ) {
+            // Keep language + version in sync after the bilingual rollout.
+            state.preferences.version =
+              DEFAULT_VERSION[state.preferences.language];
+          }
         }
         state?.setHasHydrated(true);
       },
