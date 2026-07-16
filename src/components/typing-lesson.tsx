@@ -1,0 +1,549 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { loadBible } from "@/lib/bible/load";
+import { buildLessonTarget } from "@/lib/bible/references";
+import type {
+  BibleVersionId,
+  LessonScope,
+  LessonTarget,
+} from "@/lib/bible/types";
+import {
+  createTypingState,
+  getLiveStats,
+  handleKey,
+  pauseTyping,
+  resumeTyping,
+  type LiveStats,
+  type TypingSnapshot,
+} from "@/lib/typing/engine";
+import { charClassName, paintChar, scrollCaretIntoBand } from "@/lib/typing/dom";
+import { useScribeStore } from "@/lib/store/use-scribe-store";
+import { formatDuration, uid, cn } from "@/lib/utils";
+
+const STATS_MS = 100;
+const BURST_MS = 48;
+
+export function TypingLesson({
+  version,
+  book,
+  chapter,
+  verse,
+  scope,
+  passageLength,
+  planId,
+  planDay,
+}: {
+  version: BibleVersionId;
+  book: string;
+  chapter: number;
+  verse: number;
+  scope: LessonScope;
+  passageLength: number;
+  planId?: string;
+  planDay?: number;
+}) {
+  const router = useRouter();
+  const addSession = useScribeStore((s) => s.addSession);
+  const markPlanDayComplete = useScribeStore((s) => s.markPlanDayComplete);
+
+  const [target, setTarget] = useState<LessonTarget | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [live, setLive] = useState<LiveStats | null>(null);
+  const [ready, setReady] = useState(false);
+
+  const stateRef = useRef<TypingSnapshot | null>(null);
+  const targetRef = useRef<LessonTarget | null>(null);
+  const charElsRef = useRef<(HTMLSpanElement | null)[]>([]);
+  const focusRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
+  const finishedRef = useRef(false);
+  const lastKeyAtRef = useRef(0);
+  const statsTimerRef = useRef<number | null>(null);
+  const scrollRafRef = useRef<number | null>(null);
+  const flashTimerRef = useRef<number | null>(null);
+
+  const focusLesson = useCallback(() => {
+    focusRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  const syncStats = useCallback((snapshot: TypingSnapshot) => {
+    const stats = getLiveStats(snapshot);
+    setLive(stats);
+    if (progressRef.current) {
+      progressRef.current.style.width = `${stats.progress * 100}%`;
+    }
+  }, []);
+
+  const scheduleStats = useCallback(
+    (snapshot: TypingSnapshot) => {
+      if (statsTimerRef.current != null) return;
+      statsTimerRef.current = window.setTimeout(() => {
+        statsTimerRef.current = null;
+        if (stateRef.current) syncStats(stateRef.current);
+      }, STATS_MS);
+      // Keep a cheap progress tick even between stat flushes
+      const stats = getLiveStats(snapshot);
+      if (progressRef.current) {
+        progressRef.current.style.width = `${stats.progress * 100}%`;
+      }
+    },
+    [syncStats],
+  );
+
+  const scheduleScroll = useCallback((caretIndex: number) => {
+    if (scrollRafRef.current != null) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      const scroller = scrollerRef.current;
+      const caret = charElsRef.current[caretIndex];
+      if (!scroller || !caret) return;
+      const burst = Date.now() - lastKeyAtRef.current < BURST_MS;
+      scrollCaretIntoBand(scroller, caret, { smooth: !burst });
+    });
+  }, []);
+
+  const flashWrong = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    stage.classList.add("typing-stage-wrong");
+    if (flashTimerRef.current != null) window.clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = window.setTimeout(() => {
+      stage.classList.remove("typing-stage-wrong");
+      flashTimerRef.current = null;
+    }, 90);
+  }, []);
+
+  const saveAndLeave = useCallback(
+    (
+      finalState: TypingSnapshot,
+      lesson: LessonTarget,
+      opts: { completed: boolean },
+    ) => {
+      if (finishedRef.current) return;
+      finishedRef.current = true;
+      const stats = getLiveStats(finalState);
+      const sessionId = uid("session");
+      const versesCompleted = opts.completed
+        ? lesson.verses.length
+        : Math.max(0, Math.floor(stats.progress * lesson.verses.length));
+
+      addSession({
+        id: sessionId,
+        version: lesson.version,
+        referenceLabel: lesson.referenceLabel,
+        book: lesson.book,
+        chapter: lesson.chapter,
+        startVerse: lesson.startVerse,
+        endVerse: lesson.endVerse,
+        scope: lesson.scope,
+        wpm: stats.wpm,
+        accuracy: stats.accuracy,
+        durationMs: stats.elapsedMs,
+        charsTyped: stats.charsTyped,
+        errors: stats.errors,
+        versesCompleted,
+        completedAt: new Date().toISOString(),
+        planId,
+        planDay,
+      });
+
+      if (opts.completed && planId && planDay) {
+        markPlanDayComplete(planId, planDay);
+      }
+
+      router.push(`/stats?session=${sessionId}`);
+    },
+    [addSession, markPlanDayComplete, planDay, planId, router],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    finishedRef.current = false;
+    charElsRef.current = [];
+
+    loadBible(version)
+      .then((bible) => {
+        if (cancelled) return;
+        const lesson = buildLessonTarget(bible, {
+          book,
+          chapter,
+          startVerse: verse,
+          scope,
+          passageLength,
+        });
+        if (!lesson) {
+          setError("Could not build that lesson.");
+          return;
+        }
+        const snapshot = createTypingState(lesson.text);
+        stateRef.current = snapshot;
+        targetRef.current = lesson;
+        setTarget(lesson);
+        setIsPaused(false);
+        setConfirmEnd(false);
+        setError(null);
+        setLive(getLiveStats(snapshot));
+        setReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Failed to load scripture.");
+      });
+
+    return () => {
+      cancelled = true;
+      if (statsTimerRef.current != null) window.clearTimeout(statsTimerRef.current);
+      if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current);
+      if (flashTimerRef.current != null) window.clearTimeout(flashTimerRef.current);
+    };
+  }, [version, book, chapter, verse, scope, passageLength]);
+
+  // Paint initial caret once spans mount
+  useEffect(() => {
+    if (!ready || !target) return;
+    const els = charElsRef.current;
+    for (let i = 0; i < target.text.length; i++) {
+      paintChar(els[i], i === 0 ? "current" : "pending", /\s/.test(target.text[i]));
+    }
+    focusLesson();
+    scheduleScroll(0);
+  }, [ready, target, focusLesson, scheduleScroll]);
+
+  // Clock tick while actively typing — cheap, does not touch character DOM
+  useEffect(() => {
+    if (!ready || isPaused) return;
+    const id = window.setInterval(() => {
+      const snap = stateRef.current;
+      if (!snap?.startedAt || snap.isComplete || snap.isPaused) return;
+      syncStats(snap);
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [ready, isPaused, syncStats]);
+
+  const applyKey = useCallback(
+    (key: string) => {
+      const prev = stateRef.current;
+      const lesson = targetRef.current;
+      if (!prev || !lesson || prev.isPaused || prev.isComplete) return;
+
+      const next = handleKey(prev, key);
+      if (next === prev) return;
+
+      lastKeyAtRef.current = Date.now();
+
+      const oldCaret = prev.caret;
+      const newCaret = next.caret;
+      const els = charElsRef.current;
+
+      if (key === "Backspace") {
+        paintChar(els[oldCaret], "pending", /\s/.test(prev.target[oldCaret] ?? ""));
+        paintChar(
+          els[newCaret],
+          "current",
+          /\s/.test(next.target[newCaret] ?? ""),
+        );
+      } else {
+        const wasCorrect = next.typed[oldCaret] === next.target[oldCaret];
+        if (!wasCorrect) flashWrong();
+        paintChar(
+          els[oldCaret],
+          wasCorrect ? "correct" : "incorrect",
+          /\s/.test(next.target[oldCaret] ?? ""),
+        );
+        if (!next.isComplete) {
+          paintChar(
+            els[newCaret],
+            "current",
+            /\s/.test(next.target[newCaret] ?? ""),
+          );
+        }
+      }
+
+      stateRef.current = next;
+      scheduleStats(next);
+      scheduleScroll(Math.min(newCaret, next.target.length - 1));
+
+      if (next.isComplete) {
+        syncStats(next);
+        saveAndLeave(next, lesson, { completed: true });
+      }
+    },
+    [flashWrong, saveAndLeave, scheduleScroll, scheduleStats, syncStats],
+  );
+
+  const onPause = () => {
+    const snap = stateRef.current;
+    if (!snap || snap.isPaused) return;
+    const next = pauseTyping(snap);
+    stateRef.current = next;
+    setIsPaused(true);
+    setConfirmEnd(false);
+    syncStats(next);
+  };
+
+  const onResume = () => {
+    const snap = stateRef.current;
+    if (!snap || !snap.isPaused) return;
+    const next = resumeTyping(snap);
+    stateRef.current = next;
+    setIsPaused(false);
+    setConfirmEnd(false);
+    syncStats(next);
+    requestAnimationFrame(focusLesson);
+  };
+
+  const onEnd = () => {
+    const snap = stateRef.current;
+    const lesson = targetRef.current;
+    if (!snap || !lesson) return;
+
+    if (!snap.startedAt && snap.caret === 0) {
+      router.push("/type");
+      return;
+    }
+
+    if (!confirmEnd) {
+      if (!snap.isPaused) {
+        const paused = pauseTyping(snap);
+        stateRef.current = paused;
+        setIsPaused(true);
+      }
+      setConfirmEnd(true);
+      return;
+    }
+
+    saveAndLeave(snap, lesson, { completed: snap.isComplete });
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!stateRef.current) return;
+
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (confirmEnd) {
+        setConfirmEnd(false);
+        return;
+      }
+      if (stateRef.current.isPaused) onResume();
+      else onPause();
+      return;
+    }
+
+    if (stateRef.current.isPaused) return;
+
+    if (e.key === "Backspace" || e.key.length === 1) {
+      // Stop browser shortcuts / scroll / find-as-you-type jank
+      e.preventDefault();
+      e.stopPropagation();
+      if (confirmEnd) setConfirmEnd(false);
+      applyKey(e.key);
+    }
+  };
+
+  /** Stable token structure — rebuilt only when the passage text changes. */
+  const tokens = useMemo(() => {
+    if (!target) return [];
+    const text = target.text;
+    const groups: { key: string; start: number; chars: string }[] = [];
+    let wordStart = -1;
+    let word = "";
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (/\s/.test(ch)) {
+        if (wordStart >= 0) {
+          groups.push({ key: `w-${wordStart}`, start: wordStart, chars: word });
+          wordStart = -1;
+          word = "";
+        }
+        groups.push({ key: `s-${i}`, start: i, chars: ch });
+      } else {
+        if (wordStart < 0) wordStart = i;
+        word += ch;
+      }
+    }
+    if (wordStart >= 0) {
+      groups.push({ key: `w-${wordStart}`, start: wordStart, chars: word });
+    }
+    return groups;
+  }, [target]);
+
+  if (error) {
+    return <p className="text-center text-incorrect">{error}</p>;
+  }
+
+  if (!target || !ready || !live) {
+    return (
+      <p className="text-center text-ink-muted">Preparing your lesson…</p>
+    );
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-3xl">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="font-mono text-[11px] tracking-[0.22em] text-ink-faint uppercase">
+            {target.version.toUpperCase()} · {target.scope}
+          </p>
+          <h1 className="mt-1 font-display text-3xl tracking-tight sm:text-4xl">
+            {target.referenceLabel}
+          </h1>
+        </div>
+        <div className="flex flex-wrap gap-4 font-mono text-xs tracking-wide text-ink-muted uppercase">
+          <Stat label="WPM" value={String(live.wpm)} />
+          <Stat label="Acc" value={`${live.accuracy}%`} />
+          <Stat label="Time" value={formatDuration(live.elapsedMs)} />
+          <Stat label="Err" value={String(live.errors)} />
+        </div>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {isPaused ? (
+          <button
+            type="button"
+            onClick={onResume}
+            className="rounded-full bg-ink px-5 py-2 text-sm text-bg transition hover:opacity-90"
+          >
+            Resume
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onPause}
+            className="rounded-full border border-line px-5 py-2 text-sm text-ink-muted transition hover:text-ink"
+          >
+            Pause
+          </button>
+        )}
+
+        {!confirmEnd ? (
+          <button
+            type="button"
+            onClick={onEnd}
+            className="rounded-full border border-line px-5 py-2 text-sm text-ink-muted transition hover:text-incorrect"
+          >
+            End
+          </button>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-ink-muted">End and save progress?</span>
+            <button
+              type="button"
+              onClick={onEnd}
+              className="rounded-full bg-incorrect/90 px-4 py-2 text-sm text-bg"
+            >
+              End session
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmEnd(false);
+                onResume();
+              }}
+              className="rounded-full border border-line px-4 py-2 text-sm text-ink-muted hover:text-ink"
+            >
+              Keep going
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div
+        ref={(node) => {
+          focusRef.current = node;
+          stageRef.current = node;
+        }}
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        onClick={focusLesson}
+        className="typing-stage relative outline-none"
+      >
+        <div
+          ref={scrollerRef}
+          className="typing-scroller"
+          aria-label="Typing passage"
+        >
+          <p className="typing-text font-mono text-[1.15rem] leading-[1.85] sm:text-[1.35rem] sm:leading-[1.9]">
+            {tokens.map((token) => {
+              const isSpace = token.chars.length === 1 && /\s/.test(token.chars);
+              return (
+                <span
+                  key={token.key}
+                  className={cn(!isSpace && "whitespace-nowrap")}
+                >
+                  {Array.from(token.chars).map((ch, offset) => {
+                    const i = token.start + offset;
+                    return (
+                      <span
+                        key={i}
+                        ref={(el) => {
+                          charElsRef.current[i] = el;
+                        }}
+                        className={charClassName(
+                          i === 0 ? "current" : "pending",
+                          /\s/.test(ch),
+                        )}
+                      >
+                        {ch}
+                      </span>
+                    );
+                  })}
+                </span>
+              );
+            })}
+          </p>
+        </div>
+
+        {isPaused && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-bg/75 backdrop-blur-[2px]"
+          >
+            <p className="font-display text-2xl text-ink">Paused</p>
+            <button
+              type="button"
+              onClick={onResume}
+              className="rounded-full bg-ink px-6 py-2.5 text-sm text-bg"
+            >
+              Resume
+            </button>
+            <p className="text-xs text-ink-faint">Esc to resume</p>
+          </motion.div>
+        )}
+      </div>
+
+      <div className="mt-6">
+        <div className="h-1 overflow-hidden rounded-full bg-line">
+          <div
+            ref={progressRef}
+            className="h-full bg-accent transition-[width] duration-100 ease-out"
+            style={{ width: `${live.progress * 100}%` }}
+          />
+        </div>
+        <p className="mt-4 text-sm text-ink-faint">
+          The line stays in the focus band as you type. Esc pauses · Backspace
+          corrects.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-ink-faint">{label}</div>
+      <div className="mt-0.5 text-base tracking-normal text-ink normal-case">
+        {value}
+      </div>
+    </div>
+  );
+}
