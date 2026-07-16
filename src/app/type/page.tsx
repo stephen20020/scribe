@@ -30,10 +30,11 @@ function TypeContent() {
   const planDay = params.get("planDay")
     ? Number(params.get("planDay"))
     : undefined;
+  const isRandom = params.get("random") === "1";
   const safeChapter = Number.isFinite(chapter) ? chapter : 1;
   const safeVerse = Number.isFinite(verse) ? verse : 1;
   const safePassage = Number.isFinite(passageLength) ? passageLength : 5;
-  const lessonKey = `${version}:${book}:${safeChapter}:${safeVerse}:${scope}:${safePassage}:${planId ?? ""}:${planDay ?? ""}`;
+  const lessonKey = `${version}:${book}:${safeChapter}:${safeVerse}:${scope}:${safePassage}:${planId ?? ""}:${planDay ?? ""}:${isRandom ? "r" : ""}`;
 
   return (
     <PageEnter className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8">
@@ -48,6 +49,7 @@ function TypeContent() {
           passageLength={safePassage}
           planId={planId}
           planDay={planDay}
+          isRandom={isRandom}
         />
       ) : (
         <ScripturePicker

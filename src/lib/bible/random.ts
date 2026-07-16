@@ -30,6 +30,7 @@ export function randomVerseHref(
     verse: String(pick.verse),
     scope: "verse",
     go: "1",
+    random: "1",
   });
   return `/type?${params.toString()}`;
 }

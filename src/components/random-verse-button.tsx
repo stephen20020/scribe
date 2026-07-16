@@ -12,10 +12,12 @@ export function RandomVerseButton({
   className,
   label = "Type a random verse",
   version,
+  replace = false,
 }: {
   className?: string;
   label?: string;
   version?: BibleVersionId;
+  replace?: boolean;
 }) {
   const router = useRouter();
   const preferred = useScribeStore((s) => s.preferences.version);
@@ -28,7 +30,9 @@ export function RandomVerseButton({
       const v = version ?? preferred;
       const bible = await loadBible(v);
       const pick = pickRandomVerse(bible);
-      router.push(randomVerseHref(v, pick));
+      const href = randomVerseHref(v, pick);
+      if (replace) router.replace(href);
+      else router.push(href);
     } catch {
       setBusy(false);
     }

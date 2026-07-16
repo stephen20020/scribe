@@ -23,6 +23,7 @@ import {
 } from "@/lib/typing/engine";
 import { charClassName, paintChar, scrollCaretIntoBand } from "@/lib/typing/dom";
 import { normalizeTypingChar } from "@/lib/typing/normalize";
+import { RandomVerseButton } from "@/components/random-verse-button";
 import { savePlanDayComplete, saveSession } from "@/lib/supabase/persist";
 import { formatDuration, uid, cn } from "@/lib/utils";
 
@@ -40,6 +41,7 @@ export function TypingLesson({
   planDay,
   practiceText,
   practiceLabel,
+  isRandom = false,
 }: {
   version: BibleVersionId;
   book: string;
@@ -51,6 +53,7 @@ export function TypingLesson({
   planDay?: number;
   practiceText?: string;
   practiceLabel?: string;
+  isRandom?: boolean;
 }) {
   const router = useRouter();
   const setPreferredVersion = useScribeStore((s) => s.setVersion);
@@ -435,6 +438,7 @@ export function TypingLesson({
     });
     if (planId) params.set("planId", planId);
     if (planDay != null) params.set("planDay", String(planDay));
+    if (isRandom) params.set("random", "1");
     router.replace(`/type?${params.toString()}`);
   }
 
@@ -528,6 +532,15 @@ export function TypingLesson({
               Keep going
             </button>
           </div>
+        )}
+
+        {isRandom && (
+          <RandomVerseButton
+            version={version}
+            replace
+            label="Another verse"
+            className="rounded-full border border-line px-5 py-2 text-sm text-ink-muted transition hover:text-ink"
+          />
         )}
       </div>
 
