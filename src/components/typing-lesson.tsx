@@ -22,13 +22,28 @@ import {
   type TypingSnapshot,
 } from "@/lib/typing/engine";
 import { charClassName, paintChar, scrollCaretIntoBand } from "@/lib/typing/dom";
-import { normalizeTypingChar } from "@/lib/typing/normalize";
+import {
+  normalizeTypingChar,
+  normalizeTypingText,
+} from "@/lib/typing/normalize";
 import { RandomVerseButton } from "@/components/random-verse-button";
 import { savePlanDayComplete, saveSession } from "@/lib/supabase/persist";
 import { formatDuration, uid, cn } from "@/lib/utils";
 
 const STATS_MS = 100;
 const BURST_MS = 48;
+
+function isOtherTextField(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target instanceof HTMLTextAreaElement) return true;
+  if (target instanceof HTMLInputElement) {
+    const type = target.type;
+    return !["button", "submit", "checkbox", "radio", "reset", "file"].includes(
+      type,
+    );
+  }
+  return target.isContentEditable;
+}
 
 export function TypingLesson({
   version,
@@ -74,19 +89,25 @@ export function TypingLesson({
   const stageRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const finishedRef = useRef(false);
+  const confirmEndRef = useRef(false);
+  const suppressInputRef = useRef(false);
+  const handledBeforeInputRef = useRef(false);
   const lastKeyAtRef = useRef(0);
   const statsTimerRef = useRef<number | null>(null);
   const scrollRafRef = useRef<number | null>(null);
   const flashTimerRef = useRef<number | null>(null);
 
+  useEffect(() => {
+    confirmEndRef.current = confirmEnd;
+  }, [confirmEnd]);
+
   const focusLesson = useCallback(() => {
-    const input = inputRef.current;
-    if (!input) return;
-    input.focus({ preventScroll: true });
-    // iOS sometimes needs a second focus after a tap gesture
-    requestAnimationFrame(() => {
-      input.focus({ preventScroll: true });
-    });
+    inputRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  /** Keep toolbar clicks from stealing focus (and dismissing the soft keyboard). */
+  const retainFocus = useCallback((e: React.MouseEvent | React.PointerEvent) => {
+    e.preventDefault();
   }, []);
 
   const syncStats = useCallback((snapshot: TypingSnapshot) => {
@@ -201,6 +222,7 @@ export function TypingLesson({
     }
 
     if (practiceText && practiceLabel) {
+      const text = normalizeTypingText(practiceText);
       startLesson({
         version,
         book: "Practice",
@@ -208,8 +230,8 @@ export function TypingLesson({
         startVerse: 1,
         endVerse: 1,
         scope: "verse",
-        verses: [{ verse: 1, text: practiceText }],
-        text: practiceText,
+        verses: [{ verse: 1, text }],
+        text,
         referenceLabel: practiceLabel,
       });
       return () => {
@@ -368,41 +390,138 @@ export function TypingLesson({
     saveAndLeave(snap, lesson, { completed: snap.isComplete });
   };
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!stateRef.current) return;
+  const consumeTypedText = useCallback(
+    (value: string) => {
+      if (!value || !stateRef.current || stateRef.current.isPaused) return;
+      if (confirmEndRef.current) setConfirmEnd(false);
+      for (const ch of value) {
+        if (ch === "\n" || ch === "\r") continue;
+        applyKey(ch);
+      }
+    },
+    [applyKey],
+  );
 
-    if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
-      if (confirmEnd) {
-        setConfirmEnd(false);
+  // Physical keyboard: window listener so typing still works if focus drifts.
+  // Soft keyboard: beforeinput/input on the capture textarea (deduped below).
+  useEffect(() => {
+    if (!ready) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.isComposing) return;
+      if (finishedRef.current) return;
+
+      const snap = stateRef.current;
+      if (!snap) return;
+
+      if (e.target !== inputRef.current && isOtherTextField(e.target)) {
         return;
       }
-      if (stateRef.current.isPaused) onResume();
-      else onPause();
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (confirmEndRef.current) {
+          setConfirmEnd(false);
+          return;
+        }
+        if (snap.isPaused) {
+          const next = resumeTyping(snap);
+          stateRef.current = next;
+          setIsPaused(false);
+          setConfirmEnd(false);
+          syncStats(next);
+          requestAnimationFrame(focusLesson);
+        } else {
+          const next = pauseTyping(snap);
+          stateRef.current = next;
+          setIsPaused(true);
+          setConfirmEnd(false);
+          syncStats(next);
+          inputRef.current?.blur();
+        }
+        return;
+      }
+
+      if (snap.isPaused) return;
+
+      if (e.key === "Backspace") {
+        e.preventDefault();
+        suppressInputRef.current = true;
+        if (confirmEndRef.current) setConfirmEnd(false);
+        applyKey("Backspace");
+        return;
+      }
+
+      if (
+        e.key.length === 1 &&
+        e.key !== "Unidentified" &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey
+      ) {
+        e.preventDefault();
+        suppressInputRef.current = true;
+        if (confirmEndRef.current) setConfirmEnd(false);
+        applyKey(e.key);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [ready, applyKey, focusLesson, syncStats]);
+
+  const onBeforeInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
+    const ne = e.nativeEvent as InputEvent;
+    const el = e.currentTarget;
+
+    if (suppressInputRef.current) {
+      e.preventDefault();
+      suppressInputRef.current = false;
+      el.value = "";
       return;
     }
 
-    if (stateRef.current.isPaused) return;
-
-    if (e.key === "Backspace") {
+    if (
+      ne.inputType === "deleteContentBackward" ||
+      ne.inputType === "deleteContentForward" ||
+      ne.inputType === "deleteByCut" ||
+      ne.inputType === "deleteByDrag"
+    ) {
       e.preventDefault();
-      e.stopPropagation();
-      if (confirmEnd) setConfirmEnd(false);
+      handledBeforeInputRef.current = true;
+      queueMicrotask(() => {
+        handledBeforeInputRef.current = false;
+      });
+      el.value = "";
+      if (!stateRef.current || stateRef.current.isPaused) return;
+      if (confirmEndRef.current) setConfirmEnd(false);
       applyKey("Backspace");
+      return;
+    }
+
+    if (ne.data) {
+      e.preventDefault();
+      handledBeforeInputRef.current = true;
+      queueMicrotask(() => {
+        handledBeforeInputRef.current = false;
+      });
+      el.value = "";
+      consumeTypedText(ne.data);
     }
   };
 
   const onCaptureInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
     const el = e.currentTarget;
+    if (suppressInputRef.current || handledBeforeInputRef.current) {
+      suppressInputRef.current = false;
+      handledBeforeInputRef.current = false;
+      el.value = "";
+      return;
+    }
     const value = el.value;
     el.value = "";
-    if (!value || !stateRef.current || stateRef.current.isPaused) return;
-    if (confirmEnd) setConfirmEnd(false);
-    for (const ch of value) {
-      if (ch === "\n" || ch === "\r") continue;
-      applyKey(ch);
-    }
+    // Fallback for browsers that skip beforeinput.
+    consumeTypedText(value);
   };
 
   /** Stable token structure — rebuilt only when the passage text changes. */
@@ -481,6 +600,7 @@ export function TypingLesson({
                 <button
                   key={v.id}
                   type="button"
+                  onMouseDown={retainFocus}
                   onClick={() => switchVersion(v.id)}
                   className={cn(
                     "rounded-full border px-3 py-1.5 font-mono text-[11px] tracking-wider uppercase transition",
@@ -507,6 +627,7 @@ export function TypingLesson({
         {isPaused ? (
           <button
             type="button"
+            onMouseDown={retainFocus}
             onClick={onResume}
             className="rounded-full bg-ink px-5 py-2 text-sm text-bg transition hover:opacity-90"
           >
@@ -515,6 +636,7 @@ export function TypingLesson({
         ) : (
           <button
             type="button"
+            onMouseDown={retainFocus}
             onClick={onPause}
             className="rounded-full border border-line px-5 py-2 text-sm text-ink-muted transition hover:text-ink"
           >
@@ -525,6 +647,7 @@ export function TypingLesson({
         {!confirmEnd ? (
           <button
             type="button"
+            onMouseDown={retainFocus}
             onClick={onEnd}
             className="rounded-full border border-line px-5 py-2 text-sm text-ink-muted transition hover:text-incorrect"
           >
@@ -535,6 +658,7 @@ export function TypingLesson({
             <span className="text-sm text-ink-muted">End and save progress?</span>
             <button
               type="button"
+              onMouseDown={retainFocus}
               onClick={onEnd}
               className="rounded-full bg-incorrect/90 px-4 py-2 text-sm text-bg"
             >
@@ -542,6 +666,7 @@ export function TypingLesson({
             </button>
             <button
               type="button"
+              onMouseDown={retainFocus}
               onClick={() => {
                 setConfirmEnd(false);
                 onResume();
@@ -554,16 +679,19 @@ export function TypingLesson({
         )}
 
         {isRandom && (
-          <RandomVerseButton
-            version={version}
-            replace
-            label="Another verse"
-            className="rounded-full border border-line px-5 py-2 text-sm text-ink-muted transition hover:text-ink"
-          />
+          <span onMouseDown={retainFocus}>
+            <RandomVerseButton
+              version={version}
+              replace
+              label="Another verse"
+              className="rounded-full border border-line px-5 py-2 text-sm text-ink-muted transition hover:text-ink"
+            />
+          </span>
         )}
 
         <button
           type="button"
+          onMouseDown={retainFocus}
           onClick={focusLesson}
           className={cn(
             "rounded-full border px-5 py-2 text-sm transition sm:hidden",
@@ -585,14 +713,15 @@ export function TypingLesson({
           ref={inputRef}
           className="typing-capture"
           aria-label="Type the passage"
-          autoCapitalize="off"
+          autoCapitalize="none"
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
           inputMode="text"
           enterKeyHint="next"
           rows={1}
-          onKeyDown={onKeyDown}
+          tabIndex={0}
+          onBeforeInput={onBeforeInput}
           onInput={onCaptureInput}
           onFocus={() => setInputFocused(true)}
           onBlur={() => setInputFocused(false)}

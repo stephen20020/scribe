@@ -118,13 +118,15 @@ export function handleKey(
     };
   }
 
-  if (key.length !== 1) return state;
+  const ch = normalizeTypingChar(key);
+  // One Unicode code point only (rejects modifiers / Unidentified / chords).
+  if ([...ch].length !== 1) return state;
 
   const startedAt = state.startedAt ?? now;
   const expected = state.target[state.caret];
-  const isCorrect = charsMatch(key, expected);
+  const isCorrect = charsMatch(ch, expected);
   const nextCaret = state.caret + 1;
-  const typed = state.typed + key;
+  const typed = state.typed + ch;
   const correct = state.correct + (isCorrect ? 1 : 0);
   const errors = state.errors + (isCorrect ? 0 : 1);
   const totalKeystrokes = state.totalKeystrokes + 1;
