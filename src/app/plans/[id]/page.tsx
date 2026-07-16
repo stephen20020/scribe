@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { PageEnter } from "@/components/page-enter";
+import { localizeBookName } from "@/lib/bible/books";
+import { languageForVersion, type BibleVersionId } from "@/lib/bible/types";
 import { getStockPlan } from "@/lib/plans/stock";
 import { useScribeStore } from "@/lib/store/use-scribe-store";
 import { removeCustomPlan } from "@/lib/supabase/persist";
@@ -46,12 +48,13 @@ export default function PlanDetailPage() {
   function continueDay(day = nextDay) {
     if (!plan) return;
     const activePlan = plan;
-    const version =
+    const version = ((
       ("recommendedVersion" in activePlan && activePlan.recommendedVersion) ||
-      preferences.version;
+      preferences.version
+    ) as BibleVersionId);
     const qs = new URLSearchParams({
       version,
-      book: day.book,
+      book: localizeBookName(day.book, languageForVersion(version)),
       chapter: String(day.chapter),
       verse: String(day.startVerse),
       scope: day.scope,

@@ -98,16 +98,86 @@ const BOOK_ALIASES: Record<string, string> = {
   jude: "Jude",
   rev: "Revelation",
   re: "Revelation",
+  // Spanish
+  genesis: "Genesis",
+  exodo: "Exodus",
+  levitico: "Leviticus",
+  numeros: "Numbers",
+  deuteronomio: "Deuteronomy",
+  josue: "Joshua",
+  jueces: "Judges",
+  rut: "Ruth",
+  "1reyes": "1 Kings",
+  "2reyes": "2 Kings",
+  "1cronicas": "1 Chronicles",
+  "2cronicas": "2 Chronicles",
+  esdras: "Ezra",
+  nehemias: "Nehemiah",
+  ester: "Esther",
+  salmos: "Psalms",
+  salmo: "Psalms",
+  proverbios: "Proverbs",
+  eclesiastes: "Ecclesiastes",
+  cantares: "Song of Solomon",
+  cantar: "Song of Solomon",
+  isaias: "Isaiah",
+  jeremias: "Jeremiah",
+  ezequiel: "Ezekiel",
+  oseas: "Hosea",
+  abdias: "Obadiah",
+  miqueas: "Micah",
+  nahum: "Nahum",
+  habacuc: "Habakkuk",
+  sofonias: "Zephaniah",
+  hageo: "Haggai",
+  zacarias: "Zechariah",
+  malaquias: "Malachi",
+  mateo: "Matthew",
+  marcos: "Mark",
+  lucas: "Luke",
+  juan: "John",
+  hechos: "Acts",
+  romanos: "Romans",
+  "1corintios": "1 Corinthians",
+  "2corintios": "2 Corinthians",
+  galatas: "Galatians",
+  efesios: "Ephesians",
+  filipenses: "Philippians",
+  colosenses: "Colossians",
+  "1tesalonicenses": "1 Thessalonians",
+  "2tesalonicenses": "2 Thessalonians",
+  "1timoteo": "1 Timothy",
+  "2timoteo": "2 Timothy",
+  tito: "Titus",
+  filemon: "Philemon",
+  hebreos: "Hebrews",
+  santiago: "James",
+  "1pedro": "1 Peter",
+  "2pedro": "2 Peter",
+  "1juan": "1 John",
+  "2juan": "2 John",
+  "3juan": "3 John",
+  judas: "Jude",
+  apocalipsis: "Revelation",
 };
+
+function foldKey(raw: string): string {
+  return raw
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/\./g, "")
+    .replace(/\s+/g, "");
+}
 
 function normalizeBookToken(raw: string): string {
   const cleaned = raw.trim().replace(/\./g, "");
-  const compact = cleaned.toLowerCase().replace(/\s+/g, "");
+  const compact = foldKey(cleaned);
   if (BOOK_ALIASES[compact]) return BOOK_ALIASES[compact];
 
-  const match = cleaned.match(/^(\d)\s*(.+)$/);
+  const match = cleaned.match(/^(\d)\s*(.+)$/u);
   if (match) {
-    const key = `${match[1]}${match[2].toLowerCase().replace(/\s+/g, "")}`;
+    const key = foldKey(`${match[1]}${match[2]}`);
     if (BOOK_ALIASES[key]) return BOOK_ALIASES[key];
   }
 
@@ -117,13 +187,13 @@ function normalizeBookToken(raw: string): string {
     .join(" ");
 }
 
-/** Parse "John 3:16", "John 3:16-21", "Genesis 1", "Ps 23" */
+/** Parse "John 3:16", "Juan 3:16", "Genesis 1", "Salmo 23" */
 export function parseReference(input: string): PassageRef | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
   const match = trimmed.match(
-    /^((?:\d\s*)?[A-Za-z]+(?:\s+[A-Za-z]+)*)\s+(\d+)(?::(\d+)(?:\s*[-–—]\s*(\d+))?)?$/,
+    /^((?:\d\s*)?[\p{L}]+(?:\s+[\p{L}]+)*)\s+(\d+)(?::(\d+)(?:\s*[-–—]\s*(\d+))?)?$/u,
   );
   if (!match) return null;
 

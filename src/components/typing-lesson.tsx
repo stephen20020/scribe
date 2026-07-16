@@ -5,8 +5,13 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { loadBible } from "@/lib/bible/load";
 import { buildLessonTarget } from "@/lib/bible/references";
+import { localizeBookName } from "@/lib/bible/books";
 import {
-  BIBLE_VERSIONS,
+  BIBLE_LANGUAGES,
+  DEFAULT_VERSION,
+  languageForVersion,
+  versionsForLanguage,
+  type BibleLanguageId,
   type BibleVersionId,
   type LessonScope,
   type LessonTarget,
@@ -72,6 +77,9 @@ export function TypingLesson({
 }) {
   const router = useRouter();
   const setPreferredVersion = useScribeStore((s) => s.setVersion);
+  const setPreferredLanguage = useScribeStore((s) => s.setLanguage);
+  const language = languageForVersion(version);
+  const versions = versionsForLanguage(language);
 
   const [target, setTarget] = useState<LessonTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -402,7 +410,7 @@ export function TypingLesson({
         applyKey(ch);
       }
     },
-    [applyKey],
+    [applyKey, setConfirmEnd],
   );
 
   // Physical keyboard: window listener so typing still works if focus drifts.
@@ -569,12 +577,10 @@ export function TypingLesson({
     );
   }
 
-  function switchVersion(next: BibleVersionId) {
-    if (next === version || typingStarted) return;
-    setPreferredVersion(next);
+  function goToLesson(nextVersion: BibleVersionId, nextBook = book) {
     const params = new URLSearchParams({
-      version: next,
-      book,
+      version: nextVersion,
+      book: localizeBookName(nextBook, languageForVersion(nextVersion)),
       chapter: String(chapter),
       verse: String(verse),
       scope,
@@ -585,6 +591,20 @@ export function TypingLesson({
     if (planDay != null) params.set("planDay", String(planDay));
     if (isRandom) params.set("random", "1");
     router.push(`/type?${params.toString()}`);
+  }
+
+  function switchLanguage(next: BibleLanguageId) {
+    if (next === language || typingStarted) return;
+    const nextVersion = DEFAULT_VERSION[next];
+    setPreferredLanguage(next);
+    setPreferredVersion(nextVersion);
+    goToLesson(nextVersion, book);
+  }
+
+  function switchVersion(next: BibleVersionId) {
+    if (next === version || typingStarted) return;
+    setPreferredVersion(next);
+    goToLesson(next, book);
   }
 
   return (
@@ -598,38 +618,74 @@ export function TypingLesson({
             {target.referenceLabel}
           </h1>
           {!practiceText && (
-            <div
-              className="mt-3 flex flex-wrap gap-2"
-              role="group"
-              aria-label="Translation"
-            >
-              {BIBLE_VERSIONS.map((v) => {
-                const selected = version === v.id;
-                const locked = typingStarted && !selected;
-                return (
-                  <button
-                    key={v.id}
-                    type="button"
-                    aria-pressed={selected}
-                    disabled={locked}
-                    title={
-                      locked
-                        ? "Translation is locked after you start typing"
-                        : undefined
-                    }
-                    onClick={() => switchVersion(v.id)}
-                    className={cn(
-                      "rounded-full border px-3 py-1.5 font-mono text-[11px] tracking-wider uppercase transition",
-                      selected
-                        ? "border-accent bg-accent-soft text-ink"
-                        : "border-line text-ink-muted hover:text-ink",
-                      locked && "cursor-not-allowed opacity-40 hover:text-ink-muted",
-                    )}
-                  >
-                    {v.short}
-                  </button>
-                );
-              })}
+            <div className="mt-3 space-y-2">
+              <div
+                className="inline-flex rounded-full border border-line p-0.5"
+                role="group"
+                aria-label="Language"
+              >
+                {BIBLE_LANGUAGES.map((lang) => {
+                  const selected = language === lang.id;
+                  const locked = typingStarted && !selected;
+                  return (
+                    <button
+                      key={lang.id}
+                      type="button"
+                      aria-pressed={selected}
+                      disabled={locked}
+                      title={
+                        locked
+                          ? "Language is locked after you start typing"
+                          : lang.label
+                      }
+                      onClick={() => switchLanguage(lang.id)}
+                      className={cn(
+                        "rounded-full px-3 py-1 font-mono text-[11px] tracking-wider uppercase transition",
+                        selected
+                          ? "bg-ink text-bg"
+                          : "text-ink-muted hover:text-ink",
+                        locked && "cursor-not-allowed opacity-40",
+                      )}
+                    >
+                      {lang.short}
+                    </button>
+                  );
+                })}
+              </div>
+              <div
+                className="flex flex-wrap gap-2"
+                role="group"
+                aria-label="Translation"
+              >
+                {versions.map((v) => {
+                  const selected = version === v.id;
+                  const locked = typingStarted && !selected;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      aria-pressed={selected}
+                      disabled={locked}
+                      title={
+                        locked
+                          ? "Translation is locked after you start typing"
+                          : v.name
+                      }
+                      onClick={() => switchVersion(v.id)}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 font-mono text-[11px] tracking-wider uppercase transition",
+                        selected
+                          ? "border-accent bg-accent-soft text-ink"
+                          : "border-line text-ink-muted hover:text-ink",
+                        locked &&
+                          "cursor-not-allowed opacity-40 hover:text-ink-muted",
+                      )}
+                    >
+                      {v.short}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -701,7 +757,7 @@ export function TypingLesson({
             <RandomVerseButton
               version={version}
               replace
-              label="Another verse"
+              label={language === "es" ? "Otro versículo" : "Another verse"}
               className="rounded-full border border-line px-5 py-2 text-sm text-ink-muted transition hover:text-ink"
             />
           </span>

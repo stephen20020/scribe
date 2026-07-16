@@ -6,17 +6,21 @@ import { SiteHeader } from "@/components/site-header";
 import { PageEnter } from "@/components/page-enter";
 import { ScripturePicker } from "@/components/scripture-picker";
 import { TypingLesson } from "@/components/typing-lesson";
-import type { BibleVersionId, LessonScope } from "@/lib/bible/types";
+import {
+  isBibleVersionId,
+  type BibleVersionId,
+  type LessonScope,
+} from "@/lib/bible/types";
 
 function TypeContent() {
   const params = useSearchParams();
   const go = params.get("go") === "1";
 
-  const version = (["web", "kjv", "asv"].includes(
-    params.get("version") ?? "",
-  )
-    ? params.get("version")
-    : "web") as BibleVersionId;
+  const version = (
+    isBibleVersionId(params.get("version"))
+      ? params.get("version")
+      : "web"
+  ) as BibleVersionId;
   const book = params.get("book") || "John";
   const chapter = Number(params.get("chapter") || 3);
   const verse = Number(params.get("verse") || 16);

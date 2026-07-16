@@ -1,10 +1,14 @@
+import { bookIndex } from "./books";
 import type { BibleData, BibleVersionId } from "./types";
+import { languageForVersion } from "./types";
 
 const cache = new Map<BibleVersionId, Promise<BibleData>>();
 
-function normalizeBible(raw: BibleData): BibleData {
+function normalizeBible(raw: BibleData, version: BibleVersionId): BibleData {
   return {
     ...raw,
+    version,
+    language: raw.language ?? languageForVersion(version),
     books: raw.books.map((book) => ({
       ...book,
       id: String(book.id),
@@ -24,7 +28,7 @@ export function loadBible(version: BibleVersionId): Promise<BibleData> {
       if (!res.ok) throw new Error(`Failed to load ${version}: ${res.status}`);
       return res.json() as Promise<BibleData>;
     })
-    .then(normalizeBible)
+    .then((raw) => normalizeBible(raw, version))
     .catch((err) => {
       cache.delete(version);
       throw err;
@@ -35,6 +39,11 @@ export function loadBible(version: BibleVersionId): Promise<BibleData> {
 }
 
 export function getBook(bible: BibleData, bookName: string) {
+  const idx = bookIndex(bookName);
+  if (idx >= 0 && bible.books[idx] && bookIndex(bible.books[idx].name) === idx) {
+    return bible.books[idx];
+  }
+
   const needle = bookName.toLowerCase().replace(/\s+/g, "");
   return (
     bible.books.find((b) => {

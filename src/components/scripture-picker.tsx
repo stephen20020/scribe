@@ -2,11 +2,16 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { loadBible } from "@/lib/bible/load";
+import { localizeBookName } from "@/lib/bible/books";
+import { getBook, loadBible } from "@/lib/bible/load";
 import { parseReference } from "@/lib/bible/references";
 import {
-  BIBLE_VERSIONS,
+  BIBLE_LANGUAGES,
+  DEFAULT_VERSION,
+  languageForVersion,
+  versionsForLanguage,
   type BibleData,
+  type BibleLanguageId,
   type BibleVersionId,
   type LessonScope,
 } from "@/lib/bible/types";
@@ -31,6 +36,7 @@ export function ScripturePicker({
 }) {
   const router = useRouter();
   const preferences = useScribeStore((s) => s.preferences);
+  const setLanguagePref = useScribeStore((s) => s.setLanguage);
   const setVersion = useScribeStore((s) => s.setVersion);
   const setDefaultScope = useScribeStore((s) => s.setDefaultScope);
   const setPassageLength = useScribeStore((s) => s.setPassageLength);
@@ -41,7 +47,10 @@ export function ScripturePicker({
   const [version, setLocalVersion] = useState<BibleVersionId>(
     preferences.version,
   );
-  const [book, setBook] = useState(initialBook ?? "John");
+  const language = languageForVersion(version);
+  const [book, setBook] = useState(
+    localizeBookName(initialBook ?? "John", language),
+  );
   const [chapter, setChapter] = useState(initialChapter ?? 3);
   const [verse, setVerse] = useState(initialVerse ?? 16);
   const [scope, setScope] = useState<LessonScope>(
@@ -51,6 +60,8 @@ export function ScripturePicker({
     preferences.passageLength,
   );
   const [refQuery, setRefQuery] = useState("");
+
+  const versions = versionsForLanguage(language);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,8 +73,13 @@ export function ScripturePicker({
         if (cancelled) return;
         startTransition(() => {
           setBible(data);
-          const exists = data.books.some((b) => b.name === book);
-          if (!exists) {
+          const localized = localizeBookName(
+            book,
+            data.language ?? languageForVersion(version),
+          );
+          if (getBook(data, localized)) {
+            if (localized !== book) setBook(localized);
+          } else {
             setBook(data.books[42]?.name ?? data.books[0].name);
           }
         });
@@ -71,17 +87,23 @@ export function ScripturePicker({
       .catch(() => {
         if (!cancelled) {
           startTransition(() => {
-            setError("Could not load this translation.");
+            setError(
+              language === "es"
+                ? "No se pudo cargar esta traducción."
+                : "Could not load this translation.",
+            );
           });
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [version, book]);
+    // intentionally depend on version; book remaps inside
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [version]);
 
   const selectedBook = useMemo(
-    () => bible?.books.find((b) => b.name === book) ?? null,
+    () => (bible ? getBook(bible, book) : null),
     [bible, book],
   );
 
@@ -94,22 +116,46 @@ export function ScripturePicker({
       : 1;
   const safeVerse = verse >= 1 && verse <= verseCount ? verse : 1;
 
+  function changeLanguage(next: BibleLanguageId) {
+    if (next === language) return;
+    const nextVersion = DEFAULT_VERSION[next];
+    setLanguagePref(next);
+    setLocalVersion(nextVersion);
+    setVersion(nextVersion);
+    setBook(localizeBookName(book, next));
+    setBible(null);
+  }
+
+  function changeVersion(next: BibleVersionId) {
+    setLocalVersion(next);
+    setVersion(next);
+    setBook(localizeBookName(book, languageForVersion(next)));
+  }
+
   function applyReference() {
     if (!bible) return;
     const parsed = parseReference(refQuery);
     if (!parsed) {
-      setError("Try a reference like John 3:16 or Psalms 23.");
+      setError(
+        language === "es"
+          ? "Prueba una referencia como Juan 3:16 o Salmos 23."
+          : "Try a reference like John 3:16 or Psalms 23.",
+      );
       return;
     }
-    const found = bible.books.find(
-      (b) => b.name.toLowerCase() === parsed.book.toLowerCase(),
-    );
+    const found = getBook(bible, parsed.book);
     if (!found) {
-      setError(`Book not found: ${parsed.book}`);
+      setError(
+        language === "es"
+          ? `Libro no encontrado: ${parsed.book}`
+          : `Book not found: ${parsed.book}`,
+      );
       return;
     }
     if (parsed.chapter < 1 || parsed.chapter > found.chapters.length) {
-      setError("Chapter out of range.");
+      setError(
+        language === "es" ? "Capítulo fuera de rango." : "Chapter out of range.",
+      );
       return;
     }
     const maxV = found.chapters[parsed.chapter - 1].length;
@@ -137,7 +183,7 @@ export function ScripturePicker({
 
     const params = new URLSearchParams({
       version,
-      book,
+      book: selectedBook?.name ?? book,
       chapter: String(safeChapter),
       verse: String(scope === "chapter" ? 1 : safeVerse),
       scope,
@@ -149,30 +195,97 @@ export function ScripturePicker({
     router.push(`/type?${params.toString()}`);
   }
 
+  const copy =
+    language === "es"
+      ? {
+          eyebrow: "Elige el pasaje",
+          title: "¿Dónde vas a escribir?",
+          translation: "Traducción",
+          language: "Idioma",
+          jump: "Ir a la referencia",
+          jumpPlaceholder: "Juan 3:16–21",
+          go: "Ir",
+          loading: "Cargando escritura…",
+          book: "Libro",
+          chapter: "Capítulo",
+          startVerse: "Versículo inicial",
+          lessonSize: "Tamaño de la lección",
+          verse: "Un versículo",
+          passage: "Pasaje",
+          chapterScope: "Capítulo completo",
+          verses: "Versículos",
+          begin: "Empezar a escribir",
+        }
+      : {
+          eyebrow: "Choose your place",
+          title: "Where will you type?",
+          translation: "Translation",
+          language: "Language",
+          jump: "Jump by reference",
+          jumpPlaceholder: "John 3:16–21",
+          go: "Go",
+          loading: "Loading scripture…",
+          book: "Book",
+          chapter: "Chapter",
+          startVerse: "Start verse",
+          lessonSize: "Lesson size",
+          verse: "One verse",
+          passage: "Passage",
+          chapterScope: "Whole chapter",
+          verses: "Verses",
+          begin: "Begin typing",
+        };
+
   return (
     <div className="mx-auto w-full max-w-2xl">
       <div className="mb-8">
         <p className="font-mono text-[11px] tracking-[0.22em] text-ink-faint uppercase">
-          Choose your place
+          {copy.eyebrow}
         </p>
         <h1 className="mt-2 font-display text-4xl tracking-tight text-ink sm:text-5xl">
-          Where will you type?
+          {copy.title}
         </h1>
       </div>
 
       <div className="space-y-6">
         <fieldset>
-          <legend className="mb-2 text-sm text-ink-muted">Translation</legend>
+          <legend className="mb-2 text-sm text-ink-muted">{copy.language}</legend>
+          <div
+            className="inline-flex rounded-full border border-line p-1"
+            role="group"
+            aria-label={copy.language}
+          >
+            {BIBLE_LANGUAGES.map((lang) => (
+              <button
+                key={lang.id}
+                type="button"
+                aria-pressed={language === lang.id}
+                onClick={() => changeLanguage(lang.id)}
+                className={cn(
+                  "rounded-full px-4 py-1.5 text-sm transition",
+                  language === lang.id
+                    ? "bg-ink text-bg"
+                    : "text-ink-muted hover:text-ink",
+                )}
+              >
+                {lang.short}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend className="mb-2 text-sm text-ink-muted">
+            {copy.translation}
+          </legend>
           <div className="flex flex-wrap gap-2">
-            {BIBLE_VERSIONS.map((v) => (
+            {versions.map((v) => (
               <button
                 key={v.id}
                 type="button"
                 aria-pressed={version === v.id}
-                onClick={() => {
-                  setLocalVersion(v.id);
-                  setVersion(v.id);
-                }}
+                title={v.name}
+                onClick={() => changeVersion(v.id)}
                 className={cn(
                   "rounded-full border px-4 py-2 text-sm transition",
                   version === v.id
@@ -188,7 +301,7 @@ export function ScripturePicker({
 
         <div>
           <label className="mb-2 block text-sm text-ink-muted" htmlFor="ref">
-            Jump by reference
+            {copy.jump}
           </label>
           <div className="flex gap-2">
             <input
@@ -198,7 +311,7 @@ export function ScripturePicker({
               onKeyDown={(e) => {
                 if (e.key === "Enter") applyReference();
               }}
-              placeholder="John 3:16–21"
+              placeholder={copy.jumpPlaceholder}
               className="min-w-0 flex-1 rounded-xl border border-line bg-bg-elevated/80 px-4 py-3 text-ink outline-none ring-accent focus:ring-2"
             />
             <button
@@ -206,16 +319,16 @@ export function ScripturePicker({
               onClick={applyReference}
               className="rounded-xl border border-line px-4 py-3 text-sm text-ink-muted transition hover:text-ink"
             >
-              Go
+              {copy.go}
             </button>
           </div>
         </div>
 
         {isPending && !bible && (
-          <p className="text-sm text-ink-muted">Loading scripture…</p>
+          <p className="text-sm text-ink-muted">{copy.loading}</p>
         )}
         {!bible && !error && (
-          <p className="text-sm text-ink-muted">Loading scripture…</p>
+          <p className="text-sm text-ink-muted">{copy.loading}</p>
         )}
         {error && (
           <p className="text-sm text-incorrect" role="alert" aria-live="assertive">
@@ -227,9 +340,9 @@ export function ScripturePicker({
           <>
             <div className="grid gap-4 sm:grid-cols-3">
               <label className="block text-sm">
-                <span className="mb-2 block text-ink-muted">Book</span>
+                <span className="mb-2 block text-ink-muted">{copy.book}</span>
                 <select
-                  value={book}
+                  value={selectedBook.name}
                   onChange={(e) => {
                     setBook(e.target.value);
                     setChapter(1);
@@ -246,7 +359,7 @@ export function ScripturePicker({
               </label>
 
               <label className="block text-sm">
-                <span className="mb-2 block text-ink-muted">Chapter</span>
+                <span className="mb-2 block text-ink-muted">{copy.chapter}</span>
                 <select
                   value={safeChapter}
                   onChange={(e) => {
@@ -266,7 +379,9 @@ export function ScripturePicker({
               </label>
 
               <label className="block text-sm">
-                <span className="mb-2 block text-ink-muted">Start verse</span>
+                <span className="mb-2 block text-ink-muted">
+                  {copy.startVerse}
+                </span>
                 <select
                   value={safeVerse}
                   disabled={scope === "chapter"}
@@ -285,13 +400,15 @@ export function ScripturePicker({
             </div>
 
             <fieldset>
-              <legend className="mb-2 text-sm text-ink-muted">Lesson size</legend>
+              <legend className="mb-2 text-sm text-ink-muted">
+                {copy.lessonSize}
+              </legend>
               <div className="flex flex-wrap gap-2">
                 {(
                   [
-                    ["verse", "One verse"],
-                    ["passage", "Passage"],
-                    ["chapter", "Whole chapter"],
+                    ["verse", copy.verse],
+                    ["passage", copy.passage],
+                    ["chapter", copy.chapterScope],
                   ] as const
                 ).map(([value, label]) => (
                   <button
@@ -312,7 +429,7 @@ export function ScripturePicker({
               </div>
               {scope === "passage" && (
                 <label className="mt-4 flex items-center gap-3 text-sm text-ink-muted">
-                  Verses
+                  {copy.verses}
                   <input
                     type="range"
                     min={2}
@@ -336,7 +453,7 @@ export function ScripturePicker({
                 onClick={startTyping}
                 className="w-full rounded-full bg-ink px-6 py-4 font-display text-lg text-bg transition hover:opacity-90 sm:w-auto sm:px-10"
               >
-                Begin typing
+                {copy.begin}
               </button>
               <RandomVerseButton
                 version={version}

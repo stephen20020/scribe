@@ -2,7 +2,13 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { BibleVersionId, LessonScope } from "../bible/types";
+import {
+  DEFAULT_VERSION,
+  languageForVersion,
+  type BibleLanguageId,
+  type BibleVersionId,
+  type LessonScope,
+} from "../bible/types";
 import type { CustomPlan, PlanProgress } from "../plans/types";
 
 export interface TypingSession {
@@ -46,6 +52,7 @@ export function typingSessionHref(session: TypingSession): string {
 }
 
 export interface Preferences {
+  language: BibleLanguageId;
   version: BibleVersionId;
   defaultScope: LessonScope;
   passageLength: number;
@@ -61,6 +68,7 @@ interface ScribeState {
   _hasHydrated: boolean;
 
   setHasHydrated: (value: boolean) => void;
+  setLanguage: (language: BibleLanguageId) => void;
   setVersion: (version: BibleVersionId) => void;
   setDefaultScope: (scope: LessonScope) => void;
   setPassageLength: (n: number) => void;
@@ -136,6 +144,7 @@ export const useScribeStore = create<ScribeState>()(
   persist(
     (set, get) => ({
       preferences: {
+        language: "en",
         version: "web",
         defaultScope: "passage",
         passageLength: 5,
@@ -149,9 +158,30 @@ export const useScribeStore = create<ScribeState>()(
 
       setHasHydrated: (value) => set({ _hasHydrated: value }),
 
+      setLanguage: (language) =>
+        set((s) => {
+          const currentLang = languageForVersion(s.preferences.version);
+          if (language === currentLang) {
+            return {
+              preferences: { ...s.preferences, language },
+            };
+          }
+          return {
+            preferences: {
+              ...s.preferences,
+              language,
+              version: DEFAULT_VERSION[language],
+            },
+          };
+        }),
+
       setVersion: (version) =>
         set((s) => ({
-          preferences: { ...s.preferences, version },
+          preferences: {
+            ...s.preferences,
+            version,
+            language: languageForVersion(version),
+          },
         })),
 
       setDefaultScope: (scope) =>
@@ -245,6 +275,11 @@ export const useScribeStore = create<ScribeState>()(
     {
       name: "scribe-storage-v1",
       onRehydrateStorage: () => (state) => {
+        if (state?.preferences && !state.preferences.language) {
+          state.preferences.language = languageForVersion(
+            state.preferences.version,
+          );
+        }
         state?.setHasHydrated(true);
       },
     },
