@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { SiteHeader } from "@/components/site-header";
 import { PageEnter } from "@/components/page-enter";
+import { RandomVerseButton } from "@/components/random-verse-button";
 import {
   computeAggregates,
   typingSessionHref,
@@ -21,6 +22,8 @@ function StatsContent() {
     ? sessions.find((s) => s.id === sessionId)
     : sessions[0];
   const aggregates = computeAggregates(sessions);
+  const fromRandom =
+    params.get("random") === "1" || Boolean(session?.isRandom);
 
   return (
     <PageEnter className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
@@ -56,12 +59,28 @@ function StatsContent() {
           </div>
 
           <div className="mt-10 flex flex-wrap gap-3">
-            <Link
-              href={typingSessionHref(session)}
-              className="rounded-full bg-ink px-6 py-3 text-bg transition hover:opacity-90"
-            >
-              Type again
-            </Link>
+            {fromRandom ? (
+              <RandomVerseButton
+                version={session.version}
+                label="Another random verse"
+                className="rounded-full bg-ink px-6 py-3 text-bg transition hover:opacity-90 disabled:opacity-60"
+              />
+            ) : (
+              <Link
+                href={typingSessionHref(session)}
+                className="rounded-full bg-ink px-6 py-3 text-bg transition hover:opacity-90"
+              >
+                Type again
+              </Link>
+            )}
+            {fromRandom && (
+              <Link
+                href={typingSessionHref(session)}
+                className="rounded-full border border-line px-6 py-3 text-ink-muted transition hover:text-ink"
+              >
+                Type again
+              </Link>
+            )}
             <Link
               href="/plans"
               className="rounded-full border border-line px-6 py-3 text-ink-muted transition hover:text-ink"

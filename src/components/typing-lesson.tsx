@@ -200,6 +200,7 @@ export function TypingLesson({
         planId,
         planDay,
         mistakeSummary: mistakeTrackerRef.current.summarize(),
+        isRandom: isRandom || undefined,
       };
 
       void (async () => {
@@ -209,9 +210,11 @@ export function TypingLesson({
         await saveSession(session);
       })();
 
-      router.push(`/stats?session=${sessionId}`);
+      const statsParams = new URLSearchParams({ session: sessionId });
+      if (isRandom) statsParams.set("random", "1");
+      router.push(`/stats?${statsParams.toString()}`);
     },
-    [planDay, planId, router],
+    [isRandom, planDay, planId, router],
   );
 
   useEffect(() => {

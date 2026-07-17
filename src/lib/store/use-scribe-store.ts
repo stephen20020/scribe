@@ -43,6 +43,8 @@ export interface TypingSession {
   planDay?: number;
   /** Aggregate mistake patterns — never raw Scripture. */
   mistakeSummary?: MistakeSummary | null;
+  /** Started from the random-verse flow. */
+  isRandom?: boolean;
 }
 
 /** Deep-link back into the same lesson (skips the scripture picker). */
@@ -62,6 +64,7 @@ export function typingSessionHref(session: TypingSession): string {
   });
   if (session.planId) params.set("planId", session.planId);
   if (session.planDay != null) params.set("planDay", String(session.planDay));
+  if (session.isRandom) params.set("random", "1");
   return `/type?${params.toString()}`;
 }
 
