@@ -1,5 +1,9 @@
 import type { MistakeSummary, TypingProfile } from "./types";
-import { emptyMistakeSummary, emptyTypingProfile } from "./types";
+import {
+  emptyMistakeSummary,
+  emptyPaceBuckets,
+  emptyTypingProfile,
+} from "./types";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -12,6 +16,16 @@ function asCountMap(v: unknown): Record<string, number> {
     if (typeof n === "number" && Number.isFinite(n) && n >= 0) out[k] = n;
   }
   return out;
+}
+
+function asPace(v: unknown) {
+  const base = emptyPaceBuckets();
+  if (!isRecord(v)) return base;
+  return {
+    rush: typeof v.rush === "number" ? v.rush : 0,
+    steady: typeof v.steady === "number" ? v.steady : 0,
+    slow: typeof v.slow === "number" ? v.slow : 0,
+  };
 }
 
 export function parseMistakeSummary(raw: unknown): MistakeSummary | null {
@@ -33,6 +47,7 @@ export function parseMistakeSummary(raw: unknown): MistakeSummary | null {
       typeof raw.totalMistakes === "number"
         ? raw.totalMistakes
         : base.totalMistakes,
+    paceErrors: asPace(raw.paceErrors),
   };
 }
 
@@ -42,7 +57,7 @@ export function parseTypingProfile(raw: unknown): TypingProfile | null {
   const drill = isRecord(raw.suggestedDrill)
     ? {
         label: String(raw.suggestedDrill.label ?? "Coach warm-up"),
-        href: String(raw.suggestedDrill.href ?? "/warm-up"),
+        href: String(raw.suggestedDrill.href ?? "/coach"),
         focus: String(raw.suggestedDrill.focus ?? "general"),
       }
     : null;
@@ -64,13 +79,13 @@ export function parseTypingProfile(raw: unknown): TypingProfile | null {
     weakChars: Array.isArray(raw.weakChars)
       ? (raw.weakChars as TypingProfile["weakChars"])
       : [],
-    earlyErrors:
-      typeof raw.earlyErrors === "number" ? raw.earlyErrors : 0,
+    earlyErrors: typeof raw.earlyErrors === "number" ? raw.earlyErrors : 0,
     lateErrors: typeof raw.lateErrors === "number" ? raw.lateErrors : 0,
     punctuationErrors:
       typeof raw.punctuationErrors === "number" ? raw.punctuationErrors : 0,
     totalMistakes:
       typeof raw.totalMistakes === "number" ? raw.totalMistakes : 0,
+    paceErrors: asPace(raw.paceErrors),
     narrative: typeof raw.narrative === "string" ? raw.narrative : null,
     narrativeAt: typeof raw.narrativeAt === "string" ? raw.narrativeAt : null,
     narrativeSource:

@@ -1,11 +1,21 @@
 export type MistakePairKey = string; // "e>r"
 
+export type PaceBucket = "rush" | "steady" | "slow";
+
 export interface MistakeEvent {
   expected: string;
   typed: string;
   prev: string | null;
   atMs: number;
+  /** Inter-key interval before this mistake (ms). 0 if unknown. */
+  gapMs: number;
   index: number;
+}
+
+export interface PaceBuckets {
+  rush: number;
+  steady: number;
+  slow: number;
 }
 
 export interface MistakeSummary {
@@ -16,12 +26,16 @@ export interface MistakeSummary {
   lateErrors: number;
   punctuationErrors: number;
   totalMistakes: number;
+  /** Mistakes bucketed by inter-key gap */
+  paceErrors: PaceBuckets;
 }
 
 export interface ProfilePair {
   key: string;
   count: number;
   trend: "up" | "down" | "flat";
+  /** Distinct sessions where this pair appeared */
+  sessions?: number;
 }
 
 export interface TypingProfile {
@@ -34,6 +48,7 @@ export interface TypingProfile {
   lateErrors: number;
   punctuationErrors: number;
   totalMistakes: number;
+  paceErrors: PaceBuckets;
   /** Cached AI / rules narrative */
   narrative: string | null;
   narrativeAt: string | null;
@@ -74,11 +89,17 @@ export interface CoachInsight {
 
 export interface CoachResult {
   insights: CoachInsight[];
-  /** Actionable practice packs — one per issue */
   deals: PracticeDeal[];
+  /** Near-miss patterns — shown as gathering, not actionable deals */
+  watching: { key: string; count: number; sessions: number; note: string }[];
   narrative: string;
+  pacingNote: string | null;
   source: "rules" | "ai";
   suggestedDrill: { label: string; href: string; focus: string } | null;
+}
+
+export function emptyPaceBuckets(): PaceBuckets {
+  return { rush: 0, steady: 0, slow: 0 };
 }
 
 export function emptyMistakeSummary(): MistakeSummary {
@@ -90,6 +111,7 @@ export function emptyMistakeSummary(): MistakeSummary {
     lateErrors: 0,
     punctuationErrors: 0,
     totalMistakes: 0,
+    paceErrors: emptyPaceBuckets(),
   };
 }
 
@@ -104,6 +126,7 @@ export function emptyTypingProfile(): TypingProfile {
     lateErrors: 0,
     punctuationErrors: 0,
     totalMistakes: 0,
+    paceErrors: emptyPaceBuckets(),
     narrative: null,
     narrativeAt: null,
     narrativeSource: null,
@@ -123,4 +146,21 @@ export function formatPairKey(key: string): string {
 
 export function isPunctuation(ch: string): boolean {
   return /[^\p{L}\p{N}\s]/u.test(ch);
+}
+
+/** Classify inter-key gap. Rush ≈ above comfortable speed. */
+export function paceBucket(gapMs: number): PaceBucket {
+  if (gapMs > 0 && gapMs < 90) return "rush";
+  if (gapMs >= 90 && gapMs <= 220) return "steady";
+  return "slow";
+}
+
+export function dominantPace(buckets: PaceBuckets): PaceBucket | null {
+  const total = buckets.rush + buckets.steady + buckets.slow;
+  if (total < 8) return null;
+  const entries = Object.entries(buckets) as [PaceBucket, number][];
+  entries.sort((a, b) => b[1] - a[1]);
+  const [top, n] = entries[0]!;
+  if (n / total < 0.45) return null;
+  return top;
 }

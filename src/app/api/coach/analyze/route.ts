@@ -16,6 +16,7 @@ type ProfilePayload = Pick<
   | "lateErrors"
   | "punctuationErrors"
   | "totalMistakes"
+  | "paceErrors"
 >;
 
 function sanitizeProfile(body: unknown): ProfilePayload | null {
@@ -44,6 +45,11 @@ function sanitizeProfile(body: unknown): ProfilePayload | null {
         }))
     : [];
 
+  const paceRaw =
+    p.paceErrors && typeof p.paceErrors === "object"
+      ? (p.paceErrors as Record<string, unknown>)
+      : {};
+
   return {
     sessionsSampled: Math.min(500, Math.max(0, num(p.sessionsSampled))),
     topPairs: pairs,
@@ -57,11 +63,16 @@ function sanitizeProfile(body: unknown): ProfilePayload | null {
     lateErrors: Math.min(50_000, Math.max(0, num(p.lateErrors))),
     punctuationErrors: Math.min(50_000, Math.max(0, num(p.punctuationErrors))),
     totalMistakes: Math.min(100_000, Math.max(0, num(p.totalMistakes))),
+    paceErrors: {
+      rush: Math.min(50_000, Math.max(0, num(paceRaw.rush))),
+      steady: Math.min(50_000, Math.max(0, num(paceRaw.steady))),
+      slow: Math.min(50_000, Math.max(0, num(paceRaw.slow))),
+    },
   };
 }
 
 const SYSTEM =
-  "You are a calm typing coach for a Bible typing app called Scribe. You receive ONLY aggregate mistake statistics — never Scripture text. Reply with 2-4 short sentences of practical advice. No markdown, no lists, no scripture quotes. Warm, specific, encouraging.";
+  "You are a calm typing coach for a Bible typing app called Scribe. You receive ONLY aggregate mistake statistics — never Scripture text. You may mention pacing buckets (rush/steady/slow) if present. Reply with 2-4 short sentences of practical advice. No markdown, no lists, no scripture quotes. Warm, specific, encouraging. Only speak confidently about patterns that look confirmed.";
 
 type ClaudeResult =
   | { ok: true; text: string }
@@ -142,14 +153,13 @@ export async function POST(req: Request) {
   };
 
   const rules = buildRulesCoach(profile);
-  const focus = rules.suggestedDrill?.focus ?? payload.topPairs[0]?.key ?? null;
-  const suggestedDrill = focus
+  const suggestedDrill = rules.suggestedDrill
     ? {
-        label: drillLabel(focus),
-        href: drillHref(focus),
-        focus,
+        label: drillLabel(rules.suggestedDrill.focus),
+        href: drillHref(rules.suggestedDrill.focus),
+        focus: rules.suggestedDrill.focus,
       }
-    : rules.suggestedDrill;
+    : null;
 
   const deals = rules.deals.map((d) => ({
     id: d.id,
@@ -159,29 +169,28 @@ export async function POST(req: Request) {
     severity: d.severity,
     evidence: d.evidence,
     href: d.href,
-    phases: d.phases.map((p) => ({
-      id: p.id,
-      label: p.label,
-      cue: p.cue,
-    })),
   }));
+
+  const shared = {
+    insights: rules.insights,
+    deals,
+    watching: rules.watching,
+    pacingNote: rules.pacingNote,
+    suggestedDrill,
+  };
 
   try {
     const ai = await askClaude(payload);
     if (ai.ok) {
       return NextResponse.json({
         narrative: ai.text,
-        insights: rules.insights,
-        deals,
-        suggestedDrill,
+        ...shared,
         source: "ai" as const,
       });
     }
     return NextResponse.json({
       narrative: rules.narrative,
-      insights: rules.insights,
-      deals,
-      suggestedDrill,
+      ...shared,
       source: "rules" as const,
       aiError: ai.reason,
     });
@@ -191,9 +200,7 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     narrative: rules.narrative,
-    insights: rules.insights,
-    deals,
-    suggestedDrill,
+    ...shared,
     source: "rules" as const,
   });
 }

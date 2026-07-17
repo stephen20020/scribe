@@ -2,6 +2,7 @@ import {
   emptyMistakeSummary,
   isPunctuation,
   pairKey,
+  paceBucket,
   type MistakeEvent,
   type MistakeSummary,
 } from "./types";
@@ -35,7 +36,6 @@ export function createMistakeTracker() {
         if (ev.prev) {
           const expectedBi = `${ev.prev}${ev.expected}`;
           const typedBi = `${ev.prev}${ev.typed}`;
-          // Capture true reversals like th→ht more usefully when prev matches typed of next
           const bk =
             ev.typed === ev.prev
               ? `${expectedBi}>${ev.typed}${ev.expected}`
@@ -46,6 +46,9 @@ export function createMistakeTracker() {
         if (ev.atMs < EARLY_MS) summary.earlyErrors += 1;
         if (ev.atMs >= LATE_MS) summary.lateErrors += 1;
         if (isPunctuation(ev.expected)) summary.punctuationErrors += 1;
+
+        const bucket = paceBucket(ev.gapMs);
+        summary.paceErrors[bucket] += 1;
       }
       return summary;
     },

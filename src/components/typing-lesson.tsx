@@ -316,7 +316,12 @@ export function TypingLesson({
       const next = handleKey(prev, key);
       if (next === prev) return;
 
-      lastKeyAtRef.current = Date.now();
+      const now = Date.now();
+      const gapMs =
+        lastKeyAtRef.current > 0
+          ? Math.max(0, now - lastKeyAtRef.current)
+          : 0;
+      lastKeyAtRef.current = now;
 
       const oldCaret = prev.caret;
       const newCaret = next.caret;
@@ -338,13 +343,14 @@ export function TypingLesson({
           const typed = next.typed[oldCaret] ?? "";
           const atMs = Math.max(
             0,
-            Date.now() - (next.startedAt ?? Date.now()) - next.pausedMs,
+            now - (next.startedAt ?? now) - next.pausedMs,
           );
           mistakeTrackerRef.current.record({
             expected,
             typed,
             prev: oldCaret > 0 ? (next.target[oldCaret - 1] ?? null) : null,
             atMs,
+            gapMs,
             index: oldCaret,
           });
           flashWrong();

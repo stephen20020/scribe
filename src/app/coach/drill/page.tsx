@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
@@ -14,136 +14,75 @@ import {
 
 function DrillInner() {
   const params = useSearchParams();
-  const focus = params.get("focus") || "e>r";
-  const phase = params.get("phase");
+  const focus = params.get("focus") || "";
+  const phaseParam = params.get("phase");
+  const phase =
+    phaseParam === "isolate" ||
+    phaseParam === "context" ||
+    phaseParam === "transfer"
+      ? phaseParam
+      : null;
 
-  const baseDeal = useMemo(() => buildPracticeDeal({ focus }), [focus]);
-  const basePhase = useMemo(
-    () => getDealPhase(baseDeal, phase),
-    [baseDeal, phase],
+  const deal = useMemo(
+    () => (focus ? buildPracticeDeal({ focus }) : null),
+    [focus],
   );
 
-  const fallbackText = useMemo(
-    () => (phase ? basePhase.text : flattenDealText(baseDeal)),
-    [phase, basePhase, baseDeal],
-  );
-  const fallbackLabel = useMemo(
-    () =>
-      `${baseDeal.title}${phase ? ` · ${basePhase.label}` : " · Full deal"}`,
-    [baseDeal.title, phase, basePhase.label],
-  );
-  const cue = phase
-    ? basePhase.cue
-    : "Three phases in one pass. Stay accurate.";
+  const pack = useMemo(() => {
+    if (!deal) return null;
+    const step = getDealPhase(deal, phase);
+    const text = phase ? step.text : flattenDealText(deal);
+    const label = phase
+      ? `${deal.title} · ${step.label}`
+      : `${deal.title} · Practice`;
+    return { text, label, cue: phase ? step.cue : deal.why };
+  }, [deal, phase]);
 
-  const [ai, setAi] = useState<{
-    focus: string;
-    phase: string | null;
-    text: string;
-    label: string;
-    source: "ai";
-  } | null>(null);
-
-  const active =
-    ai && ai.focus === focus && ai.phase === (phase ?? null) ? ai : null;
-  const text = active?.text ?? fallbackText;
-  const label = active?.label ?? fallbackLabel;
-  const source = active?.source ?? "rules";
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const res = await fetch("/api/coach/drill", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ focus, phase, ai: true }),
-        });
-        const data = (await res.json()) as {
-          text?: string;
-          label?: string;
-          source?: "rules" | "ai";
-        };
-        if (cancelled || !res.ok || !data.text || data.source !== "ai") return;
-        setAi({
-          focus,
-          phase: phase ?? null,
-          text: data.text,
-          label: data.label ?? fallbackLabel,
-          source: "ai",
-        });
-      } catch {
-        // keep rules text
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [focus, phase, fallbackLabel]);
-
-  const phaseLinks = baseDeal.phases.map((p) => ({
-    ...p,
-    href: `/coach/drill?focus=${encodeURIComponent(focus)}&phase=${p.id}`,
-  }));
+  if (!deal || !pack || !focus) {
+    return (
+      <PageEnter className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
+        <h1 className="font-display text-3xl tracking-tight">Practice</h1>
+        <p className="mt-3 text-sm text-ink-muted">
+          No practice deal selected.{" "}
+          <Link href="/coach" className="underline">
+            Back to coach
+          </Link>
+        </p>
+      </PageEnter>
+    );
+  }
 
   return (
     <PageEnter className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8">
-      <div className="mb-8 max-w-2xl">
+      <div className="mb-8 max-w-xl">
         <p className="font-mono text-[11px] tracking-[0.22em] text-ink-faint uppercase">
-          Practice deal
-          {source === "ai" ? " · Claude custom" : " · pattern pack"}
+          Practice
         </p>
         <h1 className="mt-2 font-display text-3xl tracking-tight sm:text-4xl">
-          {baseDeal.title}
+          {deal.title}
         </h1>
-        <p className="mt-2 text-sm text-ink-muted">{baseDeal.why}</p>
-        <p className="mt-3 text-sm text-ink">{cue}</p>
-
-        <div className="mt-5 flex flex-wrap gap-2">
-          {phaseLinks.map((p) => (
-            <Link
-              key={p.id}
-              href={p.href}
-              className={`rounded-full px-4 py-2 text-xs ${
-                phase === p.id
-                  ? "bg-ink text-bg"
-                  : "border border-line text-ink-muted hover:text-ink"
-              }`}
-            >
-              {p.label}
-            </Link>
-          ))}
-          <Link
-            href={`/coach/drill?focus=${encodeURIComponent(focus)}`}
-            className={`rounded-full px-4 py-2 text-xs ${
-              !phase
-                ? "bg-ink text-bg"
-                : "border border-line text-ink-muted hover:text-ink"
-            }`}
-          >
-            Full deal
-          </Link>
+        <p className="mt-2 text-sm text-ink-muted">{pack.cue}</p>
+        <p className="mt-4">
           <Link
             href="/coach"
-            className="rounded-full border border-line px-4 py-2 text-xs text-ink-muted hover:text-ink"
+            className="text-sm text-ink-muted underline-offset-4 hover:text-ink hover:underline"
           >
-            All deals
+            ← Coach
           </Link>
-        </div>
+        </p>
       </div>
 
+      {/* Stable key: rules pack only — no mid-lesson AI text swap */}
       <TypingLesson
-        key={`${focus}-${phase ?? "all"}-${source}-${text.slice(0, 32)}`}
+        key={`${focus}-${phase ?? "full"}`}
         version="web"
         book="Practice"
         chapter={1}
         verse={1}
         scope="verse"
         passageLength={1}
-        practiceText={text}
-        practiceLabel={label}
+        practiceText={pack.text}
+        practiceLabel={pack.label}
       />
     </PageEnter>
   );
@@ -157,7 +96,7 @@ export default function CoachDrillPage() {
         <Suspense
           fallback={
             <PageEnter className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8">
-              <p className="text-sm text-ink-muted">Loading practice deal…</p>
+              <p className="text-sm text-ink-muted">Loading practice…</p>
             </PageEnter>
           }
         >

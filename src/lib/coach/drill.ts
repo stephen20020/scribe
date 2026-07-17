@@ -45,26 +45,16 @@ function buildPairPhases(expected: string, confused: string): DrillPhase[] {
       ? ["a", "an", "the", "to", "of", "in", "and", "for"]
       : wordsForChar(expected, 14);
 
-  const isolateWords = [...words.slice(0, 8), ...words.slice(0, 4)];
-  const contrast =
-    confused && confused !== " " ? wordsForChar(confused, 4) : [];
-
-  const isolate = joinRounds(
-    [
-      isolateWords.join(" "),
-      contrast.length
-        ? `not ${contrast.join(" ")} — back to ${isolateWords.slice(0, 5).join(" ")}`
-        : "",
-    ],
-    2,
-  );
-
+  // Real words only — no gibberish letter spam (that remounted AI text felt buggy).
+  const isolate = joinRounds([words.slice(0, 10).join(" ")], 2);
   const context = contextSentences(expected === " " ? "a" : expected).join(" ");
-
   const transfer = [
-    `Hold the reach for ${e}. Do not rush into ${confused === " " ? "space" : confused}.`,
     contextSentences(expected === " " ? "th" : expected).join(" "),
-    words.slice(0, 10).join(" "),
+    `Keep the ${e} reach clean` +
+      (confused && confused !== " "
+        ? `, not drifting toward ${confused}.`
+        : "."),
+    words.slice(0, 8).join(" "),
   ].join(" ");
 
   return [
@@ -77,13 +67,13 @@ function buildPairPhases(expected: string, confused: string): DrillPhase[] {
     {
       id: "context",
       label: "Context",
-      cue: "Same reach, inside real words.",
+      cue: "Same reach, inside real phrases.",
       text: context,
     },
     {
       id: "transfer",
       label: "Transfer",
-      cue: "Keep form when sentences lengthen.",
+      cue: "Keep form when lines lengthen.",
       text: transfer,
     },
   ];

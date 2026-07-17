@@ -1,3 +1,4 @@
+import { COACH_GATES, gatheringNote, pairIsConfirmed } from "./certainty";
 import {
   buildPracticeDeal,
   drillHref,
@@ -5,6 +6,8 @@ import {
   type PracticeDeal,
 } from "./drill";
 import {
+  dominantPace,
+  emptyPaceBuckets,
   formatPairKey,
   type CoachInsight,
   type CoachResult,
@@ -19,62 +22,92 @@ function linkFor(focus: string) {
   };
 }
 
-/** Deterministic coach — always available, feeds the same shape as AI. */
+function pacingNoteFor(profile: TypingProfile): string | null {
+  const pace = profile.paceErrors ?? emptyPaceBuckets();
+  const dom = dominantPace(pace);
+  if (!dom) return null;
+  const total = pace.rush + pace.steady + pace.slow;
+  const n = pace[dom];
+  const pct = Math.round((n / Math.max(1, total)) * 100);
+  if (dom === "rush") {
+    return `${pct}% of recent mistakes happen when you rush (under ~90ms between keys). Slow the stroke just before weak reaches.`;
+  }
+  if (dom === "slow") {
+    return `${pct}% of mistakes come on hesitant keys (long pauses). Hesitation often means an unsure reach — isolate that key in a short drill once it’s confirmed.`;
+  }
+  return `${pct}% of mistakes happen at a steady pace — more likely a true finger confusion than fatigue.`;
+}
+
+/** Deterministic coach — only surfaces deals when gates pass. */
 export function buildRulesCoach(profile: TypingProfile): CoachResult {
   const insights: CoachInsight[] = [];
   const deals: PracticeDeal[] = [];
+  const watching: CoachResult["watching"] = [];
 
-  if (profile.sessionsSampled === 0 || profile.totalMistakes < 3) {
+  if (
+    profile.sessionsSampled < COACH_GATES.minSessions ||
+    profile.totalMistakes < COACH_GATES.minTotalMistakes
+  ) {
     return {
       insights: [],
       deals: [],
-      narrative:
-        "Type a few lessons and your coach will start spotting patterns — then build custom practice deals for each one.",
+      watching: [],
+      narrative: gatheringNote(profile),
+      pacingNote: pacingNoteFor(profile),
       source: "rules",
       suggestedDrill: null,
     };
   }
 
-  // Top substitution pairs → each gets its own practice deal
-  for (const pair of profile.topPairs.slice(0, 4)) {
-    if (pair.count < 2) continue;
-    const deal = buildPracticeDeal({
-      focus: pair.key,
-      count: pair.count,
-      trend: pair.trend,
-      severity: pair.count >= 10 ? "focus" : "watch",
-      evidence: [
-        `${formatPairKey(pair.key)} ×${pair.count} across ${profile.sessionsSampled} sessions`,
-        pair.trend === "up"
-          ? "Rising lately"
-          : pair.trend === "down"
-            ? "Easing — keep the pressure on"
-            : "Still in your top misses",
-      ],
-    });
-    deals.push(deal);
-    insights.push({
-      id: `pair-${pair.key}`,
-      headline: deal.title,
-      detail: deal.why,
-      severity: deal.severity,
-      evidence: deal.evidence,
-      drill: linkFor(pair.key),
-    });
+  for (const pair of profile.topPairs.slice(0, 8)) {
+    if (pairIsConfirmed(pair, profile)) {
+      if (deals.length >= COACH_GATES.maxDeals) continue;
+      const deal = buildPracticeDeal({
+        focus: pair.key,
+        count: pair.count,
+        trend: pair.trend,
+        severity: pair.count >= 20 ? "focus" : "watch",
+        evidence: [
+          `${formatPairKey(pair.key)} ×${pair.count} in ${pair.sessions ?? "?"} sessions`,
+        ],
+      });
+      deals.push(deal);
+      insights.push({
+        id: `pair-${pair.key}`,
+        headline: deal.title,
+        detail: deal.why,
+        severity: deal.severity,
+        evidence: deal.evidence,
+        drill: linkFor(pair.key),
+      });
+    } else if (pair.count >= 5 && (pair.sessions ?? 0) >= 2) {
+      watching.push({
+        key: pair.key,
+        count: pair.count,
+        sessions: pair.sessions ?? 0,
+        note: `Seen ${pair.count}× across ${pair.sessions ?? 0} sessions — not confirmed yet.`,
+      });
+    }
   }
 
   const bi = profile.topBigrams[0];
-  if (bi && bi.count >= 3) {
+  if (
+    bi &&
+    bi.count >= COACH_GATES.minBigramCount &&
+    (bi.sessions ?? 0) >= COACH_GATES.minBigramSessions &&
+    deals.length < COACH_GATES.maxDeals
+  ) {
     const digraphFocus = bi.key.includes(">")
       ? (bi.key.split(">")[0]?.slice(-2) ?? bi.key)
       : bi.key;
-    // Avoid duplicate if already covered by a pair deal
-    if (!deals.some((d) => d.focus === digraphFocus || d.id.includes(digraphFocus))) {
+    if (!deals.some((d) => d.focus === digraphFocus)) {
       const deal = buildPracticeDeal({
         focus: digraphFocus,
         count: bi.count,
         severity: "watch",
-        evidence: [`${formatPairKey(bi.key)} ×${bi.count}`],
+        evidence: [
+          `${formatPairKey(bi.key)} ×${bi.count} in ${bi.sessions ?? "?"} sessions`,
+        ],
       });
       deals.push(deal);
       insights.push({
@@ -89,15 +122,17 @@ export function buildRulesCoach(profile: TypingProfile): CoachResult {
   }
 
   if (
-    profile.punctuationErrors >= 4 &&
+    profile.punctuationErrors >= COACH_GATES.minPunctCount &&
     profile.totalMistakes > 0 &&
-    profile.punctuationErrors / profile.totalMistakes >= 0.18
+    profile.punctuationErrors / profile.totalMistakes >=
+      COACH_GATES.minPunctShare &&
+    deals.length < COACH_GATES.maxDeals
   ) {
     const deal = buildPracticeDeal({
       focus: "punctuation",
       severity: "focus",
       evidence: [
-        `${profile.punctuationErrors} punctuation misses of ${profile.totalMistakes} total`,
+        `${profile.punctuationErrors} punctuation misses of ${profile.totalMistakes}`,
       ],
     });
     deals.push(deal);
@@ -112,8 +147,9 @@ export function buildRulesCoach(profile: TypingProfile): CoachResult {
   }
 
   if (
-    profile.lateErrors >= 5 &&
-    profile.lateErrors > profile.earlyErrors * 1.35
+    profile.lateErrors >= COACH_GATES.minLateErrors &&
+    profile.lateErrors > profile.earlyErrors * COACH_GATES.lateVsEarlyRatio &&
+    deals.length < COACH_GATES.maxDeals
   ) {
     const deal = buildPracticeDeal({
       focus: "fatigue",
@@ -133,26 +169,24 @@ export function buildRulesCoach(profile: TypingProfile): CoachResult {
     });
   }
 
-  const limitedDeals = deals.slice(0, 5);
-  const limitedInsights = insights.slice(0, 5);
-  const primary = limitedDeals[0]
-    ? linkFor(limitedDeals[0].focus)
-    : null;
+  const pacingNote = pacingNoteFor(profile);
+  const primary = deals[0] ? linkFor(deals[0].focus) : null;
 
-  const narrative =
-    limitedDeals.length === 0
-      ? "Keep typing — once a few patterns repeat, your coach will open practice deals here."
-      : limitedDeals.length === 1
-        ? `${limitedDeals[0].title}. ${limitedDeals[0].why}`
-        : `You have ${limitedDeals.length} custom practice deals. Start with ${limitedDeals[0].title.toLowerCase()} — ${limitedDeals[0].why} Also queued: ${limitedDeals
-            .slice(1)
-            .map((d) => d.title.toLowerCase())
-            .join("; ")}.`;
+  let narrative: string;
+  if (deals.length === 0) {
+    narrative = gatheringNote(profile);
+  } else if (deals.length === 1) {
+    narrative = `Confirmed pattern: ${deals[0].title.replace(/^Fix /, "")}. ${deals[0].why}`;
+  } else {
+    narrative = `Confirmed ${deals.length} patterns. Start with ${deals[0].title}, then ${deals[1].title}.`;
+  }
 
   return {
-    insights: limitedInsights,
-    deals: limitedDeals,
+    insights,
+    deals,
+    watching: watching.slice(0, 4),
     narrative,
+    pacingNote,
     source: "rules",
     suggestedDrill: primary,
   };

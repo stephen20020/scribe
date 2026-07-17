@@ -15,11 +15,12 @@ export function CoachDeals({ compact = false }: { compact?: boolean }) {
 
   const rules = buildRulesCoach(profile);
   const narrative = profile.narrative ?? rules.narrative;
-  const source = profile.narrativeSource ?? rules.source;
   const deals = rules.deals;
+  const watching = rules.watching;
+  const pacingNote = rules.pacingNote;
 
   async function refreshAi() {
-    if (profile.totalMistakes < 3) return;
+    if (profile.totalMistakes < 20) return;
     setBusy(true);
     setError(null);
     try {
@@ -36,6 +37,7 @@ export function CoachDeals({ compact = false }: { compact?: boolean }) {
             lateErrors: profile.lateErrors,
             punctuationErrors: profile.punctuationErrors,
             totalMistakes: profile.totalMistakes,
+            paceErrors: profile.paceErrors,
           },
         }),
       });
@@ -66,123 +68,91 @@ export function CoachDeals({ compact = false }: { compact?: boolean }) {
     }
   }
 
-  if (deals.length === 0) {
-    return (
-      <div className={compact ? "mt-6" : "mt-10"}>
-        {!compact && (
-          <p className="text-sm text-ink-muted">{narrative}</p>
-        )}
-        <p className="mt-4 text-sm text-ink-muted">
-          No practice deals yet.{" "}
-          <Link href="/type" className="underline">
-            Type a few imperfect lessons
-          </Link>{" "}
-          and your weak patterns will show up here as custom drills.
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className={compact ? "mt-6" : "mt-10"}>
-      {!compact && (
-        <>
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <p className="font-mono text-[11px] tracking-[0.14em] text-ink-faint uppercase">
-              {source === "ai" ? "Claude + patterns" : "Pattern tips"}
-              {busy ? " · updating" : ""}
-            </p>
-            <button
-              type="button"
-              onClick={() => void refreshAi()}
-              disabled={busy || profile.totalMistakes < 3}
-              className="text-sm text-ink-muted underline-offset-4 hover:text-ink hover:underline disabled:opacity-40"
-            >
-              Refresh coach
-            </button>
-          </div>
-          <p className="mt-3 max-w-xl text-sm leading-relaxed text-ink-muted">
-            {narrative}
-          </p>
-        </>
+    <div className={compact ? "mt-6" : "mt-8"}>
+      {compact && (
+        <p className="max-w-xl text-sm leading-relaxed text-ink-muted">
+          {narrative}
+        </p>
       )}
 
-      <ul className="mt-8 space-y-0">
-        {deals.map((deal, i) => (
-          <li
-            key={deal.id}
-            className="border-t border-line py-7 first:border-t-0 first:pt-0"
-          >
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <div>
-                <p className="font-mono text-[10px] tracking-[0.16em] text-ink-faint uppercase">
-                  Deal {i + 1} · {deal.severity}
-                </p>
-                <h3 className="mt-1 font-display text-2xl tracking-tight">
-                  {deal.title}
-                </h3>
-              </div>
-              {deal.evidence[0] && (
-                <span className="font-mono text-[11px] text-ink-faint">
-                  {deal.evidence[0]}
-                </span>
-              )}
-            </div>
-            <p className="mt-2 max-w-xl text-sm text-ink-muted">{deal.why}</p>
+      {pacingNote && (
+        <p className="mt-4 max-w-xl border-l border-line pl-4 text-sm text-ink-muted">
+          {pacingNote}
+        </p>
+      )}
 
-            <div className="mt-4 flex flex-wrap gap-2">
-              {deal.phases.map((phase) => (
-                <Link
-                  key={phase.id}
-                  href={`${deal.href}&phase=${phase.id}`}
-                  className="rounded-full border border-line px-4 py-2 text-xs text-ink-muted hover:border-ink hover:text-ink"
-                >
-                  {phase.label}
-                </Link>
-              ))}
+      {deals.length === 0 ? (
+        <p className="mt-6 text-sm text-ink-muted">
+          No confirmed practice deals yet.{" "}
+          <Link href="/type" className="underline underline-offset-4">
+            Keep typing Scripture
+          </Link>
+          — patterns must repeat across several sessions before a deal opens.
+        </p>
+      ) : (
+        <ul className="mt-8 space-y-8">
+          {deals.map((deal) => (
+            <li key={deal.id}>
+              <h3 className="font-display text-2xl tracking-tight">
+                {deal.title}
+              </h3>
+              <p className="mt-2 max-w-xl text-sm text-ink-muted">{deal.why}</p>
+              {deal.evidence[0] && (
+                <p className="mt-2 font-mono text-[11px] text-ink-faint">
+                  {deal.evidence[0]}
+                </p>
+              )}
               <Link
                 href={deal.href}
-                className="rounded-full bg-ink px-4 py-2 text-xs text-bg"
+                className="mt-5 inline-flex rounded-full bg-ink px-6 py-3 text-sm text-bg transition hover:opacity-90"
               >
-                Full deal
+                Practice this
               </Link>
-            </div>
-          </li>
-        ))}
-      </ul>
-
-      {profile.topPairs.length > 0 && (
-        <p className="mt-6 font-mono text-[11px] text-ink-faint">
-          Miss map:{" "}
-          {profile.topPairs.slice(0, 6).map((p, i) => (
-            <span key={p.key}>
-              {i > 0 ? " · " : ""}
-              {formatPairKey(p.key)}×{p.count}
-            </span>
+            </li>
           ))}
-        </p>
+        </ul>
       )}
 
-      {error && <p className="mt-3 text-sm text-ink-muted">{error}</p>}
-
-      {compact && (
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Link
-            href="/coach"
-            className="rounded-full bg-ink px-6 py-3 text-sm text-bg"
-          >
-            All practice deals
-          </Link>
-          <button
-            type="button"
-            onClick={() => void refreshAi()}
-            disabled={busy || profile.totalMistakes < 3}
-            className="rounded-full border border-line px-6 py-3 text-sm text-ink-muted hover:text-ink disabled:opacity-40"
-          >
-            Refresh coach
-          </button>
+      {watching.length > 0 && (
+        <div className="mt-10 border-t border-line pt-8">
+          <p className="font-mono text-[11px] tracking-[0.16em] text-ink-faint uppercase">
+            Still watching
+          </p>
+          <ul className="mt-3 space-y-2 text-sm text-ink-muted">
+            {watching.map((w) => (
+              <li key={w.key}>
+                <span className="font-mono text-ink-faint">
+                  {formatPairKey(w.key)}
+                </span>
+                <span className="mx-2 text-ink-faint">·</span>
+                {w.note}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
+
+      {error && <p className="mt-4 text-sm text-ink-muted">{error}</p>}
+
+      <div className="mt-8 flex flex-wrap items-center gap-4">
+        {compact && deals.length > 0 && (
+          <Link
+            href="/coach"
+            className="text-sm text-ink-muted underline-offset-4 hover:text-ink hover:underline"
+          >
+            Open coach
+          </Link>
+        )}
+        <button
+          type="button"
+          onClick={() => void refreshAi()}
+          disabled={busy || profile.totalMistakes < 20}
+          className="text-sm text-ink-muted underline-offset-4 hover:text-ink hover:underline disabled:opacity-40"
+        >
+          {busy ? "Updating…" : "Refresh coach note"}
+        </button>
+      </div>
     </div>
   );
 }
