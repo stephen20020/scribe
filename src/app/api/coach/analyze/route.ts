@@ -3,6 +3,7 @@ import { buildRulesCoach } from "@/lib/coach/rules";
 import { drillHref, drillLabel } from "@/lib/coach/drill";
 import type { TypingProfile } from "@/lib/coach/types";
 import { emptyTypingProfile } from "@/lib/coach/types";
+import { getAuthedUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -134,6 +135,14 @@ async function askClaude(profile: ProfilePayload): Promise<ClaudeResult> {
 }
 
 export async function POST(req: Request) {
+  const user = await getAuthedUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "Sign in required for the typing coach" },
+      { status: 401 },
+    );
+  }
+
   let body: unknown;
   try {
     body = await req.json();

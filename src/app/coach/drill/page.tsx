@@ -6,6 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { PageEnter } from "@/components/page-enter";
 import { TypingLesson } from "@/components/typing-lesson";
+import { useAuth } from "@/components/auth-provider";
+import { CoachSignInPrompt } from "@/components/coach-sign-in";
 import {
   buildPracticeDeal,
   flattenDealText,
@@ -13,6 +15,7 @@ import {
 } from "@/lib/coach/drill";
 
 function DrillInner() {
+  const { user, loading } = useAuth();
   const params = useSearchParams();
   const focus = params.get("focus") || "";
   const phaseParam = params.get("phase");
@@ -37,6 +40,28 @@ function DrillInner() {
       : `${deal.title} · Practice`;
     return { text, label, cue: phase ? step.cue : deal.why };
   }, [deal, phase]);
+
+  if (loading) {
+    return (
+      <PageEnter className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
+        <p className="text-sm text-ink-muted">Loading…</p>
+      </PageEnter>
+    );
+  }
+
+  if (!user) {
+    return (
+      <PageEnter className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-8">
+        <p className="font-mono text-[11px] tracking-[0.22em] text-ink-faint uppercase">
+          Practice
+        </p>
+        <h1 className="mt-2 font-display text-3xl tracking-tight">
+          Coach practice
+        </h1>
+        <CoachSignInPrompt />
+      </PageEnter>
+    );
+  }
 
   if (!deal || !pack || !focus) {
     return (
@@ -72,7 +97,6 @@ function DrillInner() {
         </p>
       </div>
 
-      {/* Stable key: rules pack only — no mid-lesson AI text swap */}
       <TypingLesson
         key={`${focus}-${phase ?? "full"}`}
         version="web"

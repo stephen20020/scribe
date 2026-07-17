@@ -3,19 +3,28 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "./theme-toggle";
+import { useAuth } from "@/components/auth-provider";
 import { cn } from "@/lib/utils";
 
-const links = [
+const baseLinks = [
   { href: "/type", label: "Type" },
-  { href: "/coach", label: "Coach" },
   { href: "/plans", label: "Plans" },
   { href: "/stats", label: "Stats" },
   { href: "/dashboard", label: "Dashboard" },
-];
+] as const;
 
 export function SiteHeader({ transparent = false }: { transparent?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { user } = useAuth();
+
+  const links = user
+    ? [
+        baseLinks[0],
+        { href: "/coach", label: "Coach" },
+        ...baseLinks.slice(1),
+      ]
+    : [...baseLinks];
 
   return (
     <header

@@ -3,11 +3,14 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { PageEnter } from "@/components/page-enter";
+import { useAuth } from "@/components/auth-provider";
 import { CoachDeals } from "@/components/coach-deals";
+import { CoachSignInPrompt } from "@/components/coach-sign-in";
 import { useScribeStore } from "@/lib/store/use-scribe-store";
 import { buildRulesCoach } from "@/lib/coach/rules";
 
 export default function CoachPage() {
+  const { user, loading } = useAuth();
   const profile = useScribeStore((s) => s.typingProfile);
   const rules = buildRulesCoach(profile);
   const narrative = profile.narrative ?? rules.narrative;
@@ -23,11 +26,19 @@ export default function CoachPage() {
           <h1 className="mt-2 font-display text-4xl tracking-tight sm:text-5xl">
             Coach
           </h1>
-          <p className="mt-4 max-w-xl text-base leading-relaxed text-ink-muted">
-            {narrative}
-          </p>
 
-          <CoachDeals />
+          {loading ? (
+            <p className="mt-4 text-ink-muted">Loading…</p>
+          ) : !user ? (
+            <CoachSignInPrompt />
+          ) : (
+            <>
+              <p className="mt-4 max-w-xl text-base leading-relaxed text-ink-muted">
+                {narrative}
+              </p>
+              <CoachDeals />
+            </>
+          )}
 
           <p className="mt-14 text-sm text-ink-muted">
             <Link href="/type" className="underline underline-offset-4">
