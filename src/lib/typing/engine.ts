@@ -1,7 +1,7 @@
-import { normalizeTypingChar } from "./normalize";
+import { normalizeForMatch, normalizeTypingChar } from "./normalize";
 
 function charsMatch(typed: string, expected: string): boolean {
-  return normalizeTypingChar(typed) === normalizeTypingChar(expected);
+  return normalizeForMatch(typed) === normalizeForMatch(expected);
 }
 
 export interface TypingSnapshot {

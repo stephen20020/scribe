@@ -28,7 +28,7 @@ import {
 } from "@/lib/typing/engine";
 import { charClassName, paintChar, scrollCaretIntoBand } from "@/lib/typing/dom";
 import {
-  normalizeTypingChar,
+  normalizeForMatch,
   normalizeTypingText,
 } from "@/lib/typing/normalize";
 import { RandomVerseButton } from "@/components/random-verse-button";
@@ -336,8 +336,8 @@ export function TypingLesson({
         );
       } else {
         const wasCorrect =
-          normalizeTypingChar(next.typed[oldCaret] ?? "") ===
-          normalizeTypingChar(next.target[oldCaret] ?? "");
+          normalizeForMatch(next.typed[oldCaret] ?? "") ===
+          normalizeForMatch(next.target[oldCaret] ?? "");
         if (!wasCorrect) {
           const expected = next.target[oldCaret] ?? "";
           const typed = next.typed[oldCaret] ?? "";

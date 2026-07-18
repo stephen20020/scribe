@@ -19,6 +19,19 @@ export function normalizeTypingChar(ch: string): string {
   }
 }
 
+/**
+ * Strip combining marks so Spanish accents/tildes don't require special keys.
+ * á/Á → a/A, ñ/Ñ → n/N, ü → u, etc. Display text keeps the accents.
+ */
+export function foldDiacritics(ch: string): string {
+  return ch.normalize("NFD").replace(/\p{M}/gu, "");
+}
+
+/** Compare what the user typed against the expected character. */
+export function normalizeForMatch(ch: string): string {
+  return foldDiacritics(normalizeTypingChar(ch));
+}
+
 export function normalizeTypingText(text: string): string {
   return [...text]
     .map(normalizeTypingChar)
