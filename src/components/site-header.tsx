@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./theme-toggle";
 import { useAuth } from "@/components/auth-provider";
 import { cn } from "@/lib/utils";
@@ -15,7 +15,6 @@ const baseLinks = [
 
 export function SiteHeader({ transparent = false }: { transparent?: boolean }) {
   const pathname = usePathname();
-  const router = useRouter();
   const { user } = useAuth();
 
   const links = user
@@ -47,19 +46,26 @@ export function SiteHeader({ transparent = false }: { transparent?: boolean }) {
         {links.map((link) => {
           const active =
             pathname === link.href || pathname.startsWith(`${link.href}/`);
+          // Plain <a> for Type so Next soft-nav can't revive a cached ?go=1 lesson
+          // after finishing on /stats (Link + router.replace was not enough).
+          if (link.href === "/type") {
+            return (
+              <a
+                key={link.href}
+                href="/type"
+                className={cn(
+                  "transition hover:text-ink",
+                  active ? "text-ink" : undefined,
+                )}
+              >
+                {link.label}
+              </a>
+            );
+          }
           return (
             <Link
               key={link.href}
               href={link.href}
-              onClick={(e) => {
-                // App Router often no-ops same-path links, leaving sticky
-                // ?go=1 lesson params in place. Force a clean URL for Type.
-                if (link.href === "/type" && pathname === "/type") {
-                  e.preventDefault();
-                  router.replace("/type");
-                  router.refresh();
-                }
-              }}
               className={cn(
                 "transition hover:text-ink",
                 active ? "text-ink" : undefined,
